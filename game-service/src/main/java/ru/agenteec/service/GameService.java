@@ -65,4 +65,20 @@ public class GameService {
         board.loadFromFen(currentFen);
         return board;
     }
+    public void assignPlayerColor(String gameId, String username) {
+        String whiteKey = "chess:game:" + gameId + ":white";
+        String blackKey = "chess:game:" + gameId + ":black";
+
+        String white = redisTemplate.opsForValue().get(whiteKey);
+        if (white == null) {
+            redisTemplate.opsForValue().set(whiteKey, username, 1, TimeUnit.DAYS);
+        } else if (!white.equals(username)) {
+            redisTemplate.opsForValue().set(blackKey, username, 1, TimeUnit.DAYS);
+        }
+    }
+
+    public String getPlayerColor(String gameId, String color) {
+        return redisTemplate.opsForValue().get("chess:game:" + gameId + ":" + color.toLowerCase());
+    }
+
 }
