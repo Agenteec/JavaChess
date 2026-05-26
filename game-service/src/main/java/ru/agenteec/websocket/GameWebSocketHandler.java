@@ -23,6 +23,8 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
 
     private final Map<String, String> sessionRooms = new ConcurrentHashMap<>();
 
+    private final org.springframework.web.client.RestTemplate restTemplate = new org.springframework.web.client.RestTemplate();
+
     public GameWebSocketHandler(GameService gameService) {
         this.gameService = gameService;
     }
@@ -40,7 +42,7 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
 
             switch (payload.getAction().toUpperCase()) {
                 case "JOIN":
-                    handleJoin(session, gameId);
+                    handleJoin(session, gameId, payload);
                     break;
                 case "MOVE":
                     handleMove(payload);
@@ -56,7 +58,8 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
         }
     }
 
-    private void handleJoin(WebSocketSession session, String gameId) throws IOException {
+    private void handleJoin(WebSocketSession session, String gameId, GameMessage payload) throws IOException {
+        gameService.assignPlayerColor(gameId, payload.getUsername());
         roomSessions.computeIfAbsent(gameId, k -> Collections.synchronizedSet(new HashSet<>())).add(session);
         sessionRooms.put(session.getId(), gameId);
 
@@ -89,11 +92,46 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
             response.setLastMove(payload.getFrom() + "-" + payload.getTo());
 
             broadcastToRoom(gameId, response);
+
+            if (board.isMated() || board.isDraw()) {
+                sendGameResultToUserService(gameId, board);
+            }
+
         } catch (Exception e) {
             broadcastToRoom(gameId, new GameResponse("ERROR", e.getMessage()));
         }
     }
+    private void sendGameResultToUserService(String gameId, Board board) {
+        try {
+            String white = gameService.getPlayerColor(gameId, "white");
+            String black = gameService.getPlayerColor(gameId, "black");
 
+            if (white == null || black == null) {
+                return;
+            }
+
+            String result = "DRAW";
+            if (board.isMated()) {
+                result = (board.getSideToMove().toString().equals("BLACK")) ? "WHITE_WON" : "BLACK_WON";
+            }
+
+            Map<String, Object> request = new HashMap<>();
+            request.put("gameId", gameId);
+            request.put("whitePlayer", white);
+            request.put("blackPlayer", black);
+            request.put("result", result);
+
+            request.put("pgn", board.getHistory().toString());
+
+            String userServiceUrl = "http://localhost:8081/api/v1/internal/games/complete";
+
+            restTemplate.postForEntity(userServiceUrl, request, String.class);
+            System.out.println(">>> Игра " + gameId + " завершена. Данные отправлены в user-service!");
+
+        } catch (Exception e) {
+            System.err.println("Ошибка отправки результатов игры: " + e.getMessage());
+        }
+    }
     private void handleChat(GameMessage payload) throws IOException {
         GameResponse response = new GameResponse("CHAT", payload.getUsername(), payload.getMessage());
         broadcastToRoom(payload.getGameId(), response);
