@@ -63,15 +63,21 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
         roomSessions.computeIfAbsent(gameId, k -> Collections.synchronizedSet(new HashSet<>())).add(session);
         sessionRooms.put(session.getId(), gameId);
 
+        gameService.initGameTime(gameId);
+
         String fen = gameService.getOrCreateGame(gameId);
         Board board = gameService.getBoardState(gameId);
+
+        long[] times = gameService.updateTimeOnMove(gameId, "WHITE");
 
         GameResponse response = new GameResponse(
                 "STATE",
                 fen,
                 board.getSideToMove().toString(),
                 board.isMated(),
-                board.isDraw()
+                board.isDraw(),
+                times[0],
+                times[1]
         );
         session.sendMessage(new TextMessage(objectMapper.writeValueAsString(response)));
     }
@@ -79,29 +85,45 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
     private void handleMove(GameMessage payload) throws IOException {
         String gameId = payload.getGameId();
         try {
+            Board boardBefore = gameService.getBoardState(gameId);
+            String currentTurn = boardBefore.getSideToMove().toString();
+
+
             String newFen = gameService.makeMove(gameId, payload.getFrom(), payload.getTo());
-            Board board = gameService.getBoardState(gameId);
+            Board boardAfter = gameService.getBoardState(gameId);
+
+            long[] times = gameService.updateTimeOnMove(gameId, currentTurn);
+            long whiteTime = times[0];
+            long blackTime = times[1];
+
+            boolean isTimeout = (whiteTime <= 0 || blackTime <= 0);
 
             GameResponse response = new GameResponse(
                     "STATE",
                     newFen,
-                    board.getSideToMove().toString(),
-                    board.isMated(),
-                    board.isDraw()
+                    boardAfter.getSideToMove().toString(),
+                    boardAfter.isMated() || isTimeout,
+                    boardAfter.isDraw(),
+                    whiteTime,
+                    blackTime
             );
             response.setLastMove(payload.getFrom() + "-" + payload.getTo());
 
+            if (isTimeout) {
+                response.setLastMove("TIMEOUT");
+            }
+
             broadcastToRoom(gameId, response);
 
-            if (board.isMated() || board.isDraw()) {
-                sendGameResultToUserService(gameId, board);
+            if (boardAfter.isMated() || boardAfter.isDraw() || isTimeout) {
+                sendGameResultToUserService(gameId, boardAfter, isTimeout, whiteTime, blackTime);
             }
 
         } catch (Exception e) {
             broadcastToRoom(gameId, new GameResponse("ERROR", e.getMessage()));
         }
     }
-    private void sendGameResultToUserService(String gameId, Board board) {
+    private void sendGameResultToUserService(String gameId, Board board, boolean isTimeout, long whiteTime, long blackTime) {
         try {
             String white = gameService.getPlayerColor(gameId, "white");
             String black = gameService.getPlayerColor(gameId, "black");
@@ -111,7 +133,9 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
             }
 
             String result = "DRAW";
-            if (board.isMated()) {
+            if (isTimeout) {
+                result = (whiteTime <= 0) ? "BLACK_WON" : "WHITE_WON";
+            } else if (board.isMated()) {
                 result = (board.getSideToMove().toString().equals("BLACK")) ? "WHITE_WON" : "BLACK_WON";
             }
 
@@ -120,13 +144,11 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
             request.put("whitePlayer", white);
             request.put("blackPlayer", black);
             request.put("result", result);
-
-            request.put("pgn", board.getHistory().toString());
+            request.put("pgn", board.getHistory().toString() + (isTimeout ? " {Победа по времени}" : ""));
 
             String userServiceUrl = "http://localhost:8081/api/v1/internal/games/complete";
-
             restTemplate.postForEntity(userServiceUrl, request, String.class);
-            System.out.println(">>> Игра " + gameId + " завершена. Данные отправлены в user-service!");
+            System.out.println(">>> Game " + gameId + " complete. Result -> user-service!");
 
         } catch (Exception e) {
             System.err.println("Ошибка отправки результатов игры: " + e.getMessage());

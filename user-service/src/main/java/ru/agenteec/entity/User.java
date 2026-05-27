@@ -16,26 +16,46 @@ public class User {
     @Column(nullable = false)
     private String password;
 
-    @Column(nullable = false)
-    private int rating = 1200;
+    private int ratingBullet = 1500;
+    private int ratingBlitz = 1500;
+    private int ratingRapid = 1500;
+    private int ratingClassical = 1500;
+    private int ratingCorrespondence = 1500;
+
+    private int gamesBullet = 0;
+    private int gamesBlitz = 0;
+    private int gamesRapid = 0;
+    private int gamesClassical = 0;
+    private int gamesCorrespondence = 0;
 
     public User() {}
 
-    public User(String username, String password, int rating) {
-        this.username = username;
-        this.password = password;
-        this.rating = rating;
-    }
-
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
-
     public String getUsername() { return username; }
     public void setUsername(String username) { this.username = username; }
-
     public String getPassword() { return password; }
     public void setPassword(String password) { this.password = password; }
 
-    public int getRating() { return rating; }
-    public void setRating(int rating) { this.rating = rating; }
+    public int getRatingBullet() { return ratingBullet; }
+    public void setRatingBullet(int ratingBullet) { this.ratingBullet = ratingBullet; }
+    public int getRatingBlitz() { return ratingBlitz; }
+    public void setRatingBlitz(int ratingBlitz) { this.ratingBlitz = ratingBlitz; }
+    public int getRatingRapid() { return ratingRapid; }
+    public void setRatingRapid(int ratingRapid) { this.ratingRapid = ratingRapid; }
+    public int getRatingClassical() { return ratingClassical; }
+    public void setRatingClassical(int ratingClassical) { this.ratingClassical = ratingClassical; }
+    public int getRatingCorrespondence() { return ratingCorrespondence; }
+    public void setRatingCorrespondence(int ratingCorrespondence) { this.ratingCorrespondence = ratingCorrespondence; }
+
+    public int getGamesBullet() { return gamesBullet; }
+    public void setGamesBullet(int gamesBullet) { this.gamesBullet = gamesBullet; }
+    public int getGamesBlitz() { return gamesBlitz; }
+    public void setGamesBlitz(int gamesBlitz) { this.gamesBlitz = gamesBlitz; }
+    public int getGamesRapid() { return gamesRapid; }
+    public void setGamesRapid(int gamesRapid) { this.gamesRapid = gamesRapid; }
+    public int getGamesClassical() { return gamesClassical; }
+    public void setGamesClassical(int gamesClassical) { this.gamesClassical = gamesClassical; }
+    public int getGamesCorrespondence() { return gamesCorrespondence; }
+    public void setGamesCorrespondence(int gamesCorrespondence) { this.gamesCorrespondence = gamesCorrespondence; }
 }

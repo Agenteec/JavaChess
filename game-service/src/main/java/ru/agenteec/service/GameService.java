@@ -80,5 +80,38 @@ public class GameService {
     public String getPlayerColor(String gameId, String color) {
         return redisTemplate.opsForValue().get("chess:game:" + gameId + ":" + color.toLowerCase());
     }
+    public void initGameTime(String gameId) {
+        String whiteTimeKey = "chess:game:" + gameId + ":time:white";
+        String blackTimeKey = "chess:game:" + gameId + ":time:black";
+        String lastMoveKey = "chess:game:" + gameId + ":last_move_time";
 
+        redisTemplate.opsForValue().setIfAbsent(whiteTimeKey, "600", 1, TimeUnit.DAYS); // 10 минут
+        redisTemplate.opsForValue().setIfAbsent(blackTimeKey, "600", 1, TimeUnit.DAYS);
+        redisTemplate.opsForValue().setIfAbsent(lastMoveKey, String.valueOf(System.currentTimeMillis()), 1, TimeUnit.DAYS);
+    }
+
+    public long[] updateTimeOnMove(String gameId, String activeColor) {
+        String whiteTimeKey = "chess:game:" + gameId + ":time:white";
+        String blackTimeKey = "chess:game:" + gameId + ":time:black";
+        String lastMoveKey = "chess:game:" + gameId + ":last_move_time";
+
+        long now = System.currentTimeMillis();
+        String lastMoveStr = redisTemplate.opsForValue().get(lastMoveKey);
+        long lastMoveTime = lastMoveStr != null ? Long.parseLong(lastMoveStr) : now;
+
+        long elapsedSeconds = (now - lastMoveTime) / 1000;
+
+        String activeKey = activeColor.equalsIgnoreCase("WHITE") ? whiteTimeKey : blackTimeKey;
+        String currentTimeStr = redisTemplate.opsForValue().get(activeKey);
+        long timeLeft = currentTimeStr != null ? Long.parseLong(currentTimeStr) : 600;
+
+        timeLeft = Math.max(0, timeLeft - elapsedSeconds);
+        redisTemplate.opsForValue().set(activeKey, String.valueOf(timeLeft), 1, TimeUnit.DAYS);
+        redisTemplate.opsForValue().set(lastMoveKey, String.valueOf(now), 1, TimeUnit.DAYS);
+
+        long whiteTime = Long.parseLong(redisTemplate.opsForValue().get(whiteTimeKey));
+        long blackTime = Long.parseLong(redisTemplate.opsForValue().get(blackTimeKey));
+
+        return new long[]{whiteTime, blackTime};
+    }
 }

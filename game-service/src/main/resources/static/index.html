@@ -2,52 +2,41 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>ChessSphere - Играть</title>
+    <title>Онлайн Шахматы</title>
     <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css" integrity="sha384-q94+BZtLrkL1/ohfjR8c6L+A6qzNH9R2hBLwyoAfu3i/WCvQjzL2RQJ3uNHDISdU" crossorigin="anonymous">
     <style>
         body {
             font-family: Arial, sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
             background-color: #2f2f2f;
             color: #fff;
             margin: 0;
             padding: 20px;
-        }
-        .container {
             display: flex;
-            gap: 20px;
-            margin-top: 20px;
-            max-width: 1000px;
+            flex-direction: column;
+            align-items: center;
+        }
+        .screen {
+            display: none;
+            flex-direction: column;
+            align-items: center;
             width: 100%;
+            max-width: 1000px;
         }
-        #board {
-            width: 500px;
+        .active-screen {
+            display: flex
         }
-        .panel {
-            flex: 1;
+        .card {
+            background: #3f3f3f;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.4);
             display: flex;
             flex-direction: column;
             gap: 15px;
-            background: #3f3f3f;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            width: 350px;
         }
-        #chat {
-            height: 250px;
-            border: 1px solid #555;
-            background: #1e1e1e;
-            padding: 10px;
-            overflow-y: auto;
-            border-radius: 4px;
-            font-size: 14px;
-        }
-        .chat-msg { margin-bottom: 8px; }
-        .chat-sender { color: #f0d9b5; font-weight: bold; }
-        input, button {
-            padding: 10px;
+        input, button, select {
+            padding: 12px;
             border-radius: 4px;
             border: 1px solid #555;
             background: #555;
@@ -61,30 +50,109 @@
             font-weight: bold;
         }
         button:hover { background-color: #0056b3; }
-        .status { font-weight: bold; font-size: 18px; color: #f0d9b5; }
+        .danger-btn { background-color: #dc3545; }
+        .danger-btn:hover { background-color: #bd2130; }
+
+        .tab-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        .tab-btn {
+            flex: 1;
+            background: #222;
+        }
+        .tab-btn.active {
+            background: #007bff;
+        }
+
+        .game-grid {
+            display: flex;
+            gap: 20px;
+            width: 100%;
+        }
+        #board { width: 500px; }
+        .panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            background: #3f3f3f;
+            padding: 20px;
+            border-radius: 8px;
+        }
+        #chat {
+            height: 250px;
+            border: 1px solid #555;
+            background: #1e1e1e;
+            padding: 10px;
+            overflow-y: auto;
+            border-radius: 4px;
+        }
+        .chat-msg { margin-bottom: 8px; }
+        .chat-sender { color: #f0d9b5; font-weight: bold; }
+
+        /* Часы */
+        .timers-container {
+            display: flex; gap: 30px; margin-bottom: 15px;
+        }
+        .timer {
+            padding: 8px 20px; border-radius: 4px; font-size: 20px; font-weight: bold; border: 2px solid transparent;
+        }
+        #whiteTimer { background: #555; }
+        #blackTimer { background: #1e1e1e; }
     </style>
 </head>
 <body>
 
-<h1>Онлайн Шахматы — ChessSphere</h1>
+<h1>Шахматный Портал</h1>
 
-<div style="display: flex; gap: 10px; margin-bottom: 10px;">
-    <input type="text" id="usernameInput" placeholder="Ваше имя" value="player1">
-    <input type="text" id="roomInput" placeholder="ID Комнаты (например, room1)" value="room1">
-    <button id="connectBtn" onclick="connect()">Подключиться к игре</button>
+<div id="authScreen" class="screen active-screen">
+    <div class="tab-buttons" style="width: 350px;">
+        <button id="loginTabBtn" class="tab-btn active" onclick="switchAuthTab('login')">Вход</button>
+        <button id="registerTabBtn" class="tab-btn" onclick="switchAuthTab('register')">Регистрация</button>
+    </div>
+
+    <div class="card">
+        <h3 id="authTitle" style="margin: 0; text-align: center;">Войти в аккаунт</h3>
+        <input type="text" id="authUsername" placeholder="Имя пользователя">
+        <input type="password" id="authPassword" placeholder="Пароль">
+        <button id="authSubmitBtn" onclick="handleAuthSubmit()">Войти</button>
+    </div>
 </div>
 
-<div class="status" id="gameStatus">Ожидание подключения...</div>
+<div id="lobbyScreen" class="screen">
+    <div class="card" style="width: 450px;">
+        <h2 style="margin: 0; text-align: center;">Добро пожаловать, <span id="lobbyUser" style="color: #f0d9b5;">...</span>!</h2>
+        <div style="text-align: center; font-size: 18px;">Ваш рейтинг Elo: <strong id="lobbyRating" style="color: #ffcc00;">1200</strong></div>
 
-<div class="container">
-    <div id="board"></div>
+        <hr style="border-color: #555; width: 100%;">
 
-    <div class="panel">
-        <h3>Чат партии</h3>
-        <div id="chat"></div>
-        <div style="display: flex; gap: 5px;">
-            <input type="text" id="chatInput" placeholder="Введите сообщение..." style="flex: 1;" onkeypress="handleChatKey(event)">
-            <button onclick="sendChatMessage()">Отправить</button>
+        <h3 style="margin: 0;">Быстрый старт игры</h3>
+        <input type="text" id="roomInput" placeholder="Введите ID комнаты (например: room1)" value="room1">
+        <button onclick="joinGameRoom()">Играть</button>
+
+        <button class="danger-btn" onclick="logout()" style="margin-top: 20px;">Выйти из профиля</button>
+    </div>
+</div>
+
+<div id="gameScreen" class="screen">
+    <div class="timers-container">
+        <div id="whiteTimer" class="timer">Белые: 10:00</div>
+        <div id="blackTimer" class="timer">Черные: 10:00</div>
+    </div>
+    <div id="gameStatus" style="font-size: 18px; font-weight: bold; margin-bottom: 10px; color: #f0d9b5;">Ход: Белых</div>
+
+    <div class="game-grid">
+        <div id="board"></div>
+        <div class="panel">
+            <h3>Чат партии</h3>
+            <div id="chat"></div>
+            <div style="display: flex; gap: 5px;">
+                <input type="text" id="chatInput" placeholder="Введите сообщение..." style="flex: 1;" onkeypress="handleChatKey(event)">
+                <button onclick="sendChatMessage()">Отправить</button>
+            </div>
+            <button class="danger-btn" onclick="leaveGameRoom()" style="margin-top: 10px;">Сдаться / Выйти в лобби</button>
         </div>
     </div>
 </div>
@@ -92,36 +160,105 @@
 <script src="https://code.jquery.com/jquery-3.5.1.min.js" integrity="sha384-ZvpUoO/+PpLXR1lu4jmpXWu80pZlYUAfxl5NsBMWOEPSjUn/6Z/hRTt8+pR6L4N2" crossorigin="anonymous"></script>
 <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js" integrity="sha384-8Vi8VHwn3vjQ9eUHUxex3JSN/NFqUg3QbPyX8kWyb93+8AC/pPWTzj+nHtbC5bxD" crossorigin="anonymous"></script>
 <script>
+    const USER_SERVICE_URL = "http://localhost:8081/api/v1/auth";
+    let activeAuthTab = 'login';
+
     let socket = null;
     let board = null;
     let gameId = '';
-    let username = '';
 
+    let whiteTime = 600;
+    let blackTime = 600;
+    let currentTurn = 'WHITE';
+    let timerInterval = null;
 
     const config = {
         draggable: true,
         position: 'start',
         onDrop: handleMove,
-
         pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
     };
-
     board = Chessboard('board', config);
 
-    function connect() {
-        username = document.getElementById('usernameInput').value;
-        gameId = document.getElementById('roomInput').value;
+    window.onload = function() {
+        const token = localStorage.getItem("jwt_token");
+        const username = localStorage.getItem("username");
+        const rating = localStorage.getItem("rating");
 
-        if (!username || !gameId) {
-            alert("Введите имя и ID комнаты!");
+        if (token && username) {
+            showLobby(username, rating);
+        } else {
+            showScreen("authScreen");
+        }
+    };
+    function switchAuthTab(tab) {
+        activeAuthTab = tab;
+        document.getElementById('loginTabBtn').classList.toggle('active', tab === 'login');
+        document.getElementById('registerTabBtn').classList.toggle('active', tab === 'register');
+        document.getElementById('authTitle').innerText = tab === 'login' ? 'Войти в аккаунт' : 'Создать аккаунт';
+        document.getElementById('authSubmitBtn').innerText = tab === 'login' ? 'Войти' : 'Зарегистрироваться';
+    }
+
+    function handleAuthSubmit() {
+        const username = document.getElementById('authUsername').value.trim();
+        const password = document.getElementById('authPassword').value;
+
+        if (!username || !password) {
+            alert("Заполните все поля!");
             return;
         }
 
-        socket = new WebSocket("ws://localhost:8082/game");
+        const endpoint = activeAuthTab === 'login' ? '/login' : '/register';
+
+        fetch(USER_SERVICE_URL + endpoint, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ username: username, password: password })
+        })
+            .then(res => {
+                if (!res.ok) throw new Error("Неверные данные или пользователь уже существует");
+                return res.json();
+            })
+            .then(data => {
+                localStorage.setItem("jwt_token", data.token);
+                localStorage.setItem("username", data.username);
+                localStorage.setItem("rating", data.rating);
+
+                showLobby(data.username, data.rating);
+            })
+            .catch(err => alert(err.message));
+    }
+
+    function showLobby(username, rating) {
+        document.getElementById('lobbyUser').innerText = username;
+        document.getElementById('lobbyRating').innerText = rating;
+        showScreen("lobbyScreen");
+    }
+
+    function logout() {
+        localStorage.clear();
+        showScreen("authScreen");
+        document.getElementById('authUsername').value = '';
+        document.getElementById('authPassword').value = '';
+    }
+
+    function joinGameRoom() {
+        gameId = document.getElementById('roomInput').value.trim();
+        const username = localStorage.getItem("username");
+
+        if (!gameId) {
+            alert("Введите ID комнаты!");
+            return;
+        }
+
+        const wsProtocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+        const wsUrl = wsProtocol + window.location.host + "/game";
+
+        socket = new WebSocket(wsUrl);
 
         socket.onopen = () => {
-            document.getElementById('gameStatus').innerText = `Подключено к комнате: ${gameId}`;
-            document.getElementById('connectBtn').disabled = true;
+            showScreen("gameScreen");
+            document.getElementById('chat').innerHTML = '';
 
             const joinMsg = {
                 action: "JOIN",
@@ -135,32 +272,84 @@
             const data = JSON.parse(event.data);
 
             if (data.type === "STATE") {
-
                 board.position(data.fen);
+                whiteTime = data.whiteTimeLeft;
+                blackTime = data.blackTimeLeft;
+                currentTurn = data.turn;
+
+                document.getElementById('whiteTimer').innerText = `Белые: ${formatTime(whiteTime)}`;
+                document.getElementById('blackTimer').innerText = `Черные: ${formatTime(blackTime)}`;
+
+                if (currentTurn === 'WHITE') {
+                    document.getElementById('whiteTimer').style.border = '2px solid #ffcc00';
+                    document.getElementById('blackTimer').style.border = '2px solid transparent';
+                } else {
+                    document.getElementById('blackTimer').style.border = '2px solid #ffcc00';
+                    document.getElementById('whiteTimer').style.border = '2px solid transparent';
+                }
 
                 let statusText = `Ход: ${data.turn === 'WHITE' ? 'Белых' : 'Черных'}`;
-                if (data.mated) statusText += " — МАТ!";
+                if (data.mated) statusText += " — ИГРА ОКОНЧЕНА!";
                 if (data.draw) statusText += " — НИЧЬЯ!";
                 document.getElementById('gameStatus').innerText = statusText;
+
+                startClientTimer();
             }
             else if (data.type === "CHAT") {
                 appendChat(data.sender, data.message);
             }
             else if (data.type === "ERROR") {
-                alert("Ошибка от сервера: " + data.message);
-                socket.send(JSON.stringify({ action: "JOIN", gameId: gameId }));
+                alert("Ошибка: " + data.message);
+                socket.send(JSON.stringify({ action: "JOIN", gameId: gameId, username: username }));
             }
         };
 
         socket.onclose = () => {
-            document.getElementById('gameStatus').innerText = "Соединение разорвано";
-            document.getElementById('connectBtn').disabled = false;
+            if (timerInterval) clearInterval(timerInterval);
         };
     }
 
+    function leaveGameRoom() {
+        if (socket) {
+            socket.close();
+        }
+        if (timerInterval) clearInterval(timerInterval);
+        const username = localStorage.getItem("username");
+        const rating = localStorage.getItem("rating");
+        showLobby(username, rating);
+    }
 
-    function handleMove(source, target, piece, newPos, oldPos, orientation) {
+    function showScreen(screenId) {
+        document.querySelectorAll('.screen').forEach(s => s.classList.remove('active-screen'));
+        document.getElementById(screenId).classList.add('active-screen');
+    }
+
+    function formatTime(seconds) {
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+
+    function startClientTimer() {
+        if (timerInterval) clearInterval(timerInterval);
+        timerInterval = setInterval(() => {
+            if (currentTurn === 'WHITE') {
+                if (whiteTime > 0) {
+                    whiteTime--;
+                    document.getElementById('whiteTimer').innerText = `Белые: ${formatTime(whiteTime)}`;
+                }
+            } else {
+                if (blackTime > 0) {
+                    blackTime--;
+                    document.getElementById('blackTimer').innerText = `Черные: ${formatTime(blackTime)}`;
+                }
+            }
+        }, 1000);
+    }
+
+    function handleMove(source, target) {
         if (source === target) return;
+        const username = localStorage.getItem("username");
 
         const moveMsg = {
             action: "MOVE",
@@ -169,13 +358,13 @@
             from: source,
             to: target
         };
-
         socket.send(JSON.stringify(moveMsg));
     }
 
     function sendChatMessage() {
         const input = document.getElementById('chatInput');
         const text = input.value.trim();
+        const username = localStorage.getItem("username");
         if (!text || !socket) return;
 
         const chatMsg = {
@@ -184,22 +373,18 @@
             username: username,
             message: text
         };
-
         socket.send(JSON.stringify(chatMsg));
         input.value = '';
     }
 
     function handleChatKey(event) {
-        if (event.key === 'Enter') {
-            sendChatMessage();
-        }
+        if (event.key === 'Enter') sendChatMessage();
     }
 
     function appendChat(sender, message) {
         const chatDiv = document.getElementById('chat');
-        const msgHtml = `<div class="chat-msg"><span class="chat-sender">${sender}:</span> ${message}</div>`;
-        chatDiv.innerHTML += msgHtml;
-        chatDiv.scrollTop = chatDiv.scrollHeight; // Скролл вниз
+        chatDiv.innerHTML += `<div class="chat-msg"><span class="chat-sender">${sender}:</span> ${message}</div>`;
+        chatDiv.scrollTop = chatDiv.scrollHeight;
     }
 </script>
 </body>

@@ -10,14 +10,19 @@ public class GameResponse {
     private String message;
     private String sender;
 
+    private long whiteTimeLeft;
+    private long blackTimeLeft;
+
     public GameResponse() {}
 
-    public GameResponse(String type, String fen, String turn, boolean isMated, boolean isDraw) {
+    public GameResponse(String type, String fen, String turn, boolean isMated, boolean isDraw, long whiteTimeLeft, long blackTimeLeft) {
         this.type = type;
         this.fen = fen;
         this.turn = turn;
         this.isMated = isMated;
         this.isDraw = isDraw;
+        this.whiteTimeLeft = whiteTimeLeft;
+        this.blackTimeLeft = blackTimeLeft;
     }
 
     public GameResponse(String type, String sender, String message) {
@@ -40,4 +45,6 @@ public class GameResponse {
     public boolean isDraw() { return isDraw; }
     public String getMessage() { return message; }
     public String getSender() { return sender; }
+    public long getWhiteTimeLeft() { return whiteTimeLeft; }
+    public long getBlackTimeLeft() { return blackTimeLeft; }
 }
