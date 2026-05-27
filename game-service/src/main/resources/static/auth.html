@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Java Chess — Вход и Регистрация</title>
+    <style>
+        :root {
+            --bg-color: #161512;
+            --panel-bg: #1e1c18;
+            --border-color: #2a2824;
+            --text-color: #bababa;
+            --text-bright: #fff;
+            --accent-color: #577d36;
+            --accent-hover: #689243;
+        }
+
+        body {
+            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+
+        .header-logo {
+            font-size: 26px;
+            font-weight: bold;
+            color: var(--text-bright);
+            text-decoration: none;
+            margin-bottom: 30px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: color 0.2s;
+        }
+        .header-logo:hover {
+            color: #f0d9b5;
+        }
+
+
+        .auth-container {
+            width: 100%;
+            max-width: 380px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .tab-group {
+            display: flex;
+            gap: 10px;
+        }
+        .tab-btn {
+            flex: 1;
+            background-color: #262421;
+            border: 1px solid var(--border-color);
+            color: var(--text-color);
+            padding: 12px;
+            border-radius: 6px;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 15px;
+            transition: all 0.2s;
+        }
+        .tab-btn:hover {
+            background-color: #363431;
+            color: var(--text-bright);
+        }
+        .tab-btn.active {
+            background-color: var(--accent-color);
+            border-color: var(--accent-color);
+            color: var(--text-bright);
+        }
+
+        .auth-card {
+            background-color: var(--panel-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 30px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            box-sizing: border-box;
+        }
+
+        .form-title {
+            font-size: 22px;
+            color: var(--text-bright);
+            margin: 0;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .form-group label {
+            font-size: 13px;
+            font-weight: bold;
+            color: #8b8985;
+        }
+        .form-control {
+            background-color: var(--bg-color);
+            border: 1px solid var(--border-color);
+            color: white;
+            padding: 12px;
+            border-radius: 4px;
+            font-size: 15px;
+            box-sizing: border-box;
+            width: 100%;
+            transition: border-color 0.2s;
+        }
+        .form-control:focus {
+            outline: none;
+            border-color: var(--accent-color);
+        }
+
+        .submit-btn {
+            background-color: var(--accent-color);
+            color: var(--text-bright);
+            padding: 12px;
+            border-radius: 4px;
+            font-size: 16px;
+            font-weight: bold;
+            border: none;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin-top: 10px;
+            width: 100%;
+        }
+        .submit-btn:hover {
+            background-color: var(--accent-hover);
+        }
+
+        .back-link {
+            text-align: center;
+            font-size: 14px;
+            color: #8b8985;
+            text-decoration: none;
+            margin-top: 10px;
+            transition: color 0.2s;
+        }
+        .back-link:hover {
+            color: var(--text-bright);
+        }
+    </style>
+</head>
+<body>
+
+<a href="index.html" class="header-logo">♞ Java Chess</a>
+
+<div class="auth-container">
+    <div class="tab-group">
+        <button id="loginTabBtn" class="tab-btn active" onclick="switchTab('login')">Вход</button>
+        <button id="registerTabBtn" class="tab-btn" onclick="switchTab('register')">Регистрация</button>
+    </div>
+
+    <div class="auth-card">
+        <h2 id="formTitle" class="form-title">Войти в аккаунт</h2>
+
+        <div class="form-group">
+            <label for="usernameInput">Имя пользователя</label>
+            <input type="text" id="usernameInput" class="form-control" placeholder="Например, grandmaster_77">
+        </div>
+
+        <div class="form-group">
+            <label for="passwordInput">Пароль</label>
+            <input type="password" id="passwordInput" class="form-control" placeholder="Введите ваш пароль">
+        </div>
+
+        <button id="submitBtn" class="submit-btn" onclick="handleFormSubmit()">Войти</button>
+    </div>
+
+    <a href="index.html" class="back-link">← Вернуться на главную страницу</a>
+</div>
+
+<script>
+    const USER_SERVICE_URL = "http://localhost:8081/api/v1/auth";
+    let activeTab = 'login';
+
+    window.onload = function() {
+        if (localStorage.getItem("jwt_token")) {
+            window.location.href = "index.html";
+        }
+    };
+
+    function switchTab(tab) {
+        activeTab = tab;
+        document.getElementById('loginTabBtn').classList.toggle('active', tab === 'login');
+        document.getElementById('registerTabBtn').classList.toggle('active', tab === 'register');
+        document.getElementById('formTitle').innerText = tab === 'login' ? 'Войти в аккаунт' : 'Создать аккаунт';
+        document.getElementById('submitBtn').innerText = tab === 'login' ? 'Войти' : 'Зарегистрироваться';
+    }
+
+    function handleFormSubmit() {
+        const username = document.getElementById('usernameInput').value.trim();
+        const password = document.getElementById('passwordInput').value;
+
+        if (!username || !password) {
+            alert("Пожалуйста, заполните все поля.");
+            return;
+        }
+
+        const endpoint = activeTab === 'login' ? '/login' : '/register';
+
+        fetch(USER_SERVICE_URL + endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: username, password: password })
+        })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(activeTab === 'login'
+                        ? "Неверное имя пользователя или пароль."
+                        : "Имя пользователя уже занято."
+                    );
+                }
+                return response.json();
+            })
+            .then(data => {
+                localStorage.setItem("jwt_token", data.token);
+                localStorage.setItem("username", data.username);
+                localStorage.setItem("rating", data.rating);
+
+                window.location.href = "index.html";
+            })
+            .catch(error => {
+                alert(error.message);
+            });
+    }
+</script>
+</body>
+</html>
