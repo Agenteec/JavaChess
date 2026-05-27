@@ -29,12 +29,23 @@ public class AuthService {
         User user = new User();
         user.setUsername(request.getUsername());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
-        user.setRating(1200);
+
+        user.setRatingBullet(1500);
+        user.setRatingBlitz(1500);
+        user.setRatingRapid(1500);
+        user.setRatingClassical(1500);
+        user.setRatingCorrespondence(1500);
+
+        user.setGamesBullet(0);
+        user.setGamesBlitz(0);
+        user.setGamesRapid(0);
+        user.setGamesClassical(0);
+        user.setGamesCorrespondence(0);
 
         userRepository.save(user);
 
         String token = jwtService.generateToken(user.getUsername());
-        return new AuthResponse(token, user.getUsername(), user.getRating());
+        return new AuthResponse(token, user.getUsername(), user.getRatingRapid());
     }
 
     public AuthResponse login(LoginRequest request) {
@@ -46,6 +57,6 @@ public class AuthService {
         }
 
         String token = jwtService.generateToken(user.getUsername());
-        return new AuthResponse(token, user.getUsername(), user.getRating());
+        return new AuthResponse(token, user.getUsername(), user.getRatingRapid());
     }
 }
