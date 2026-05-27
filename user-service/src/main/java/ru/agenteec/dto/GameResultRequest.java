@@ -6,6 +6,7 @@ public class GameResultRequest {
     private String blackPlayer;
     private String result;
     private String pgn;
+    private String category;
 
     public String getGameId() { return gameId; }
     public void setGameId(String gameId) { this.gameId = gameId; }
@@ -17,4 +18,6 @@ public class GameResultRequest {
     public void setResult(String result) { this.result = result; }
     public String getPgn() { return pgn; }
     public void setPgn(String pgn) { this.pgn = pgn; }
+    public String getCategory() { return category; }
+    public void setCategory(String category) { this.category = category; }
 }

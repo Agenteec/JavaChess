@@ -22,6 +22,7 @@ public class InternalGameController {
 
     @PostMapping("/complete")
     public ResponseEntity<String> completeGame(@RequestBody GameResultRequest request) {
+        // Сохраняем матч
         GameHistory history = new GameHistory();
         history.setGameId(request.getGameId());
         history.setWhitePlayer(request.getWhitePlayer());
@@ -30,28 +31,80 @@ public class InternalGameController {
         history.setPgn(request.getPgn());
         gameHistoryRepository.save(history);
 
+        // Проверяем, не анонимы ли играли (анонимы не имеют аккаунтов)
         User white = userRepository.findByUsername(request.getWhitePlayer()).orElse(null);
         User black = userRepository.findByUsername(request.getBlackPlayer()).orElse(null);
 
+        // Пересчет Elo только если оба игрока зарегистрированы
         if (white != null && black != null) {
-            calculateAndApplyElo(white, black, request.getResult());
+            String category = request.getCategory() != null ? request.getCategory().toUpperCase() : "RAPID";
+            calculateAndApplyElo(white, black, request.getResult(), category);
             userRepository.save(white);
             userRepository.save(black);
         }
 
-        return ResponseEntity.ok("Game result saved, elo updated");
+        return ResponseEntity.ok("Game completed");
     }
 
-    private void calculateAndApplyElo(User white, User black, String result) {
-        int kFactor = 30;
+    private void calculateAndApplyElo(User white, User black, String result, String category) {
+        int ratingW = getRating(white, category);
+        int ratingB = getRating(black, category);
+        int gamesW = getGamesCount(white, category);
+        int gamesB = getGamesCount(black, category);
 
-        double scoreWhite = result.equals("WHITE_WON") ? 1.0 : (result.equals("DRAW") ? 0.5 : 0.0);
-        double scoreBlack = 1.0 - scoreWhite;
+        int kW = gamesW < 10 ? 40 : 15;
+        int kB = gamesB < 10 ? 40 : 15;
 
-        double expectedWhite = 1.0 / (1.0 + Math.pow(10.0, (black.getRating() - white.getRating()) / 400.0));
-        double expectedBlack = 1.0 / (1.0 + Math.pow(10.0, (white.getRating() - black.getRating()) / 400.0));
+        double scoreW = result.equals("WHITE_WON") ? 1.0 : (result.equals("DRAW") ? 0.5 : 0.0);
+        double scoreB = 1.0 - scoreW;
 
-        white.setRating((int) Math.round(white.getRating() + kFactor * (scoreWhite - expectedWhite)));
-        black.setRating((int) Math.round(black.getRating() + kFactor * (scoreBlack - expectedBlack)));
+        double expectedW = 1.0 / (1.0 + Math.pow(10.0, (ratingB - ratingW) / 400.0));
+        double expectedB = 1.0 / (1.0 + Math.pow(10.0, (ratingW - ratingB) / 400.0));
+
+        setRating(white, category, (int) Math.round(ratingW + kW * (scoreW - expectedW)));
+        setRating(black, category, (int) Math.round(ratingB + kB * (scoreB - expectedB)));
+
+        incrementGamesCount(white, category);
+        incrementGamesCount(black, category);
+    }
+
+    private int getRating(User user, String category) {
+        return switch (category) {
+            case "BULLET" -> user.getRatingBullet();
+            case "BLITZ" -> user.getRatingBlitz();
+            case "CLASSICAL" -> user.getRatingClassical();
+            case "CORRESPONDENCE" -> user.getRatingCorrespondence();
+            default -> user.getRatingRapid();
+        };
+    }
+
+    private void setRating(User user, String category, int value) {
+        switch (category) {
+            case "BULLET" -> user.setRatingBullet(value);
+            case "BLITZ" -> user.setRatingBlitz(value);
+            case "CLASSICAL" -> user.setRatingClassical(value);
+            case "CORRESPONDENCE" -> user.setRatingCorrespondence(value);
+            default -> user.setRatingRapid(value);
+        }
+    }
+
+    private int getGamesCount(User user, String category) {
+        return switch (category) {
+            case "BULLET" -> user.getGamesBullet();
+            case "BLITZ" -> user.getGamesBlitz();
+            case "CLASSICAL" -> user.getGamesClassical();
+            case "CORRESPONDENCE" -> user.getGamesCorrespondence();
+            default -> user.getGamesRapid();
+        };
+    }
+
+    private void incrementGamesCount(User user, String category) {
+        switch (category) {
+            case "BULLET" -> user.setGamesBullet(user.getGamesBullet() + 1);
+            case "BLITZ" -> user.setGamesBlitz(user.getGamesBlitz() + 1);
+            case "CLASSICAL" -> user.setGamesClassical(user.getGamesClassical() + 1);
+            case "CORRESPONDENCE" -> user.setGamesCorrespondence(user.getGamesCorrespondence() + 1);
+            default -> user.setGamesRapid(user.getGamesRapid() + 1);
+        }
     }
 }
