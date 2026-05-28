@@ -1,5 +1,7 @@
 package ru.agenteec.dto;
 
+import java.util.List;
+
 public class GameResponse {
     private String type;
     private String fen;
@@ -9,7 +11,11 @@ public class GameResponse {
     private boolean isDraw;
     private String message;
     private String sender;
+    private String endReason;
+    private List<String> moves;
 
+    public List<String> getMoves() { return moves; }
+    public void setMoves(List<String> moves) { this.moves = moves; }
     private long whiteTimeLeft;
     private long blackTimeLeft;
 
@@ -47,4 +53,6 @@ public class GameResponse {
     public String getSender() { return sender; }
     public long getWhiteTimeLeft() { return whiteTimeLeft; }
     public long getBlackTimeLeft() { return blackTimeLeft; }
+    public String getEndReason() { return endReason; }
+    public void setEndReason(String endReason) { this.endReason = endReason; }
 }

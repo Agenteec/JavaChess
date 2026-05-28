@@ -19,10 +19,14 @@ public class InternalGameController {
         this.gameHistoryRepository = gameHistoryRepository;
         this.userRepository = userRepository;
     }
-
+    @GetMapping("/{gameId}")
+    public ResponseEntity<GameHistory> getGameHistory(@PathVariable("gameId") String gameId) {
+        return gameHistoryRepository.findByGameId(gameId)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
     @PostMapping("/complete")
     public ResponseEntity<String> completeGame(@RequestBody GameResultRequest request) {
-        // Сохраняем матч
         GameHistory history = new GameHistory();
         history.setGameId(request.getGameId());
         history.setWhitePlayer(request.getWhitePlayer());
@@ -31,11 +35,9 @@ public class InternalGameController {
         history.setPgn(request.getPgn());
         gameHistoryRepository.save(history);
 
-        // Проверяем, не анонимы ли играли (анонимы не имеют аккаунтов)
         User white = userRepository.findByUsername(request.getWhitePlayer()).orElse(null);
         User black = userRepository.findByUsername(request.getBlackPlayer()).orElse(null);
 
-        // Пересчет Elo только если оба игрока зарегистрированы
         if (white != null && black != null) {
             String category = request.getCategory() != null ? request.getCategory().toUpperCase() : "RAPID";
             calculateAndApplyElo(white, black, request.getResult(), category);

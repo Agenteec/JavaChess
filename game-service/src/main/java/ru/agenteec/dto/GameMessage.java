@@ -7,6 +7,9 @@ public class GameMessage {
     private String from;
     private String to;
     private String message;
+    private Integer minutes;
+    private Integer increment;
+    private String category;
 
     public String getAction() { return action; }
     public void setAction(String action) { this.action = action; }
@@ -20,4 +23,10 @@ public class GameMessage {
     public void setTo(String to) { this.to = to; }
     public String getMessage() { return message; }
     public void setMessage(String message) { this.message = message; }
+    public Integer getMinutes() { return minutes; }
+    public void setMinutes(Integer minutes) { this.minutes = minutes; }
+    public Integer getIncrement() { return increment; }
+    public void setIncrement(Integer increment) { this.increment = increment; }
+    public String getCategory() { return category; }
+    public void setCategory(String category) { this.category = category; }
 }
