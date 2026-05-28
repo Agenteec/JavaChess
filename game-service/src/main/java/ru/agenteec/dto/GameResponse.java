@@ -13,6 +13,13 @@ public class GameResponse {
     private String sender;
     private String endReason;
     private List<String> moves;
+    private String category;
+    private Integer whiteRatingChange;
+    private Integer blackRatingChange;
+    private Integer whiteNewRating;
+    private Integer blackNewRating;
+
+
 
     public List<String> getMoves() { return moves; }
     public void setMoves(List<String> moves) { this.moves = moves; }
@@ -55,4 +62,14 @@ public class GameResponse {
     public long getBlackTimeLeft() { return blackTimeLeft; }
     public String getEndReason() { return endReason; }
     public void setEndReason(String endReason) { this.endReason = endReason; }
+    public String getCategory() { return category; }
+    public void setCategory(String category) { this.category = category; }
+    public Integer getWhiteRatingChange() { return whiteRatingChange; }
+    public void setWhiteRatingChange(Integer whiteRatingChange) { this.whiteRatingChange = whiteRatingChange; }
+    public Integer getBlackRatingChange() { return blackRatingChange; }
+    public void setBlackRatingChange(Integer blackRatingChange) { this.blackRatingChange = blackRatingChange; }
+    public Integer getWhiteNewRating() { return whiteNewRating; }
+    public void setWhiteNewRating(Integer whiteNewRating) { this.whiteNewRating = whiteNewRating; }
+    public Integer getBlackNewRating() { return blackNewRating; }
+    public void setBlackNewRating(Integer blackNewRating) { this.blackNewRating = blackNewRating; }
 }

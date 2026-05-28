@@ -15,6 +15,7 @@ public class GameHistory {
     private String whitePlayer;
     private String blackPlayer;
     private String result;
+    private String category;
 
     @Column(length = 2000)
     private String pgn;
@@ -37,4 +38,6 @@ public class GameHistory {
     public void setPgn(String pgn) { this.pgn = pgn; }
     public LocalDateTime getEndedAt() { return endedAt; }
     public void setEndedAt(LocalDateTime endedAt) { this.endedAt = endedAt; }
+    public String getCategory() { return category; }
+    public void setCategory(String category) { this.category = category; }
 }
