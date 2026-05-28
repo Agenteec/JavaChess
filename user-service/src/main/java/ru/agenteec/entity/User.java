@@ -5,6 +5,7 @@ import jakarta.persistence.*;
 @Entity
 @Table(name = "users")
 public class User {
+    private String verificationToken;
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -15,6 +16,11 @@ public class User {
 
     @Column(nullable = false)
     private String password;
+
+    @Column(unique = true, nullable = false)
+    private String email;
+
+    private boolean verified = false;
 
     private int ratingBullet = 1500;
     private int ratingBlitz = 1500;
@@ -58,4 +64,15 @@ public class User {
     public void setGamesClassical(int gamesClassical) { this.gamesClassical = gamesClassical; }
     public int getGamesCorrespondence() { return gamesCorrespondence; }
     public void setGamesCorrespondence(int gamesCorrespondence) { this.gamesCorrespondence = gamesCorrespondence; }
+
+    public String getEmail() {return email;}
+    public void setEmail(String email){this.email = email;}
+
+    public boolean isVerified() {return verified;}
+    public void setVerified(boolean verified) {this.verified = verified;}
+
+    public String getVerificationToken() { return verificationToken; }
+    public void setVerificationToken(String verificationToken) { this.verificationToken = verificationToken; }
+
+
 }

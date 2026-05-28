@@ -26,4 +26,24 @@ public class AuthController {
     public ResponseEntity<AuthResponse> login(@RequestBody LoginRequest request) {
         return ResponseEntity.ok(authService.login(request));
     }
+    @GetMapping("/verify")
+    public ResponseEntity<String> verifyUser(@RequestParam("token") String token) {
+        boolean isVerified = authService.verifyUser(token);
+        if (isVerified) {
+            return ResponseEntity.ok()
+                    .header("Content-Type", "text/html; charset=UTF-8")
+                    .body("<html><body style='font-family: Arial, sans-serif; text-align: center; padding: 50px; background-color: #161512; color: #fff;'>" +
+                            "<h1 style='color: #577d36;'>✔ Аккаунт успешно активирован!</h1>" +
+                            "<p>Поздравляем! Теперь вы можете вернуться на главную страницу, войти в свой аккаунт и начать играть.</p>" +
+                            "<a href='http://localhost:8082/auth.html' style='color: #ffcc00; font-weight: bold; text-decoration: none;'>Перейти к авторизации →</a>" +
+                            "</body></html>");
+        } else {
+            return ResponseEntity.badRequest()
+                    .header("Content-Type", "text/html; charset=UTF-8")
+                    .body("<html><body style='font-family: Arial, sans-serif; text-align: center; padding: 50px; background-color: #161512; color: #fff;'>" +
+                            "<h1 style='color: #dc3545;'> Ошибка активации</h1>" +
+                            "<p>Токен неверен, устарел или уже был использован.</p>" +
+                            "</body></html>");
+        }
+    }
 }

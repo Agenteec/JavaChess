@@ -173,6 +173,11 @@
             <input type="text" id="usernameInput" class="form-control" placeholder="Например, grandmaster_77">
         </div>
 
+        <div class="form-group" id="emailGroup" style="display: none;">
+            <label for="emailInput">Электронная почта</label>
+            <input type="email" id="emailInput" class="form-control" placeholder="example@mail.com">
+        </div>
+
         <div class="form-group">
             <label for="passwordInput">Пароль</label>
             <input type="password" id="passwordInput" class="form-control" placeholder="Введите ваш пароль">
@@ -200,39 +205,58 @@
         document.getElementById('registerTabBtn').classList.toggle('active', tab === 'register');
         document.getElementById('formTitle').innerText = tab === 'login' ? 'Войти в аккаунт' : 'Создать аккаунт';
         document.getElementById('submitBtn').innerText = tab === 'login' ? 'Войти' : 'Зарегистрироваться';
+
+        document.getElementById('emailGroup').style.display = tab === 'register' ? 'flex' : 'none';
     }
 
     function handleFormSubmit() {
         const username = document.getElementById('usernameInput').value.trim();
         const password = document.getElementById('passwordInput').value;
+        const email = document.getElementById('emailInput').value.trim();
 
         if (!username || !password) {
             alert("Пожалуйста, заполните все поля.");
             return;
         }
 
+        if (activeTab === 'register' && !email) {
+            alert("Пожалуйста, введите адрес электронной почты.");
+            return;
+        }
+
         const endpoint = activeTab === 'login' ? '/login' : '/register';
+
+        const requestBody = { username: username, password: password };
+        if (activeTab === 'register') {
+            requestBody.email = email;
+        }
 
         fetch(USER_SERVICE_URL + endpoint, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: username, password: password })
+            body: JSON.stringify(requestBody)
         })
             .then(response => {
                 if (!response.ok) {
                     throw new Error(activeTab === 'login'
-                        ? "Неверное имя пользователя или пароль."
-                        : "Имя пользователя уже занято."
+                        ? "Неверное имя пользователя или пароль (или почта не подтверждена)."
+                        : "Имя пользователя или почта уже заняты."
                     );
                 }
                 return response.json();
             })
             .then(data => {
-                localStorage.setItem("jwt_token", data.token);
-                localStorage.setItem("username", data.username);
-                localStorage.setItem("rating", data.rating);
-
-                window.location.href = "index.html";
+                if (data.token === null) {
+                    alert("Регистрация успешна! Письмо со ссылкой для подтверждения отправлено на вашу почту. Пожалуйста, подтвердите аккаунт перед входом.");
+                    switchTab('login');
+                    document.getElementById('usernameInput').value = data.username;
+                    document.getElementById('passwordInput').value = '';
+                } else {
+                    localStorage.setItem("jwt_token", data.token);
+                    localStorage.setItem("username", data.username);
+                    localStorage.setItem("rating", data.rating);
+                    window.location.href = "index.html";
+                }
             })
             .catch(error => {
                 alert(error.message);
