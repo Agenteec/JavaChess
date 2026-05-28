@@ -13,6 +13,10 @@
             --text-bright: #fff;
             --accent-color: #577d36;
             --accent-hover: #689243;
+            --danger-color: #dc3545;
+            --danger-bg: #4a1c1c;
+            --success-color: #28a745;
+            --success-bg: #1c3d24;
         }
 
         body {
@@ -27,6 +31,7 @@
             justify-content: center;
             min-height: 100vh;
             box-sizing: border-box;
+            padding: 15px;
         }
 
         .header-logo {
@@ -34,16 +39,13 @@
             font-weight: bold;
             color: var(--text-bright);
             text-decoration: none;
-            margin-bottom: 30px;
+            margin-bottom: 25px;
             display: flex;
             align-items: center;
             gap: 10px;
             transition: color 0.2s;
         }
-        .header-logo:hover {
-            color: #f0d9b5;
-        }
-
+        .header-logo:hover { color: #f0d9b5; }
 
         .auth-container {
             width: 100%;
@@ -79,6 +81,7 @@
             color: var(--text-bright);
         }
 
+        /* Карточка формы */
         .auth-card {
             background-color: var(--panel-bg);
             border: 1px solid var(--border-color);
@@ -87,7 +90,7 @@
             box-shadow: 0 8px 24px rgba(0,0,0,0.5);
             display: flex;
             flex-direction: column;
-            gap: 20px;
+            gap: 18px;
             box-sizing: border-box;
         }
 
@@ -97,6 +100,28 @@
             margin: 0;
             text-align: center;
             font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        /* Встроенные уведомления */
+        .alert-msg {
+            display: none; /* Скрыты по умолчанию */
+            font-size: 13px;
+            padding: 12px;
+            border-radius: 4px;
+            text-align: center;
+            line-height: 1.4;
+            box-sizing: border-box;
+        }
+        .alert-danger {
+            background-color: var(--danger-bg);
+            border: 1px solid var(--danger-color);
+            color: #ff9e9e;
+        }
+        .alert-success {
+            background-color: var(--success-bg);
+            border: 1px solid var(--success-color);
+            color: #9eff9e;
         }
 
         .form-group {
@@ -138,21 +163,17 @@
             margin-top: 10px;
             width: 100%;
         }
-        .submit-btn:hover {
-            background-color: var(--accent-hover);
-        }
+        .submit-btn:hover { background-color: var(--accent-hover); }
 
         .back-link {
             text-align: center;
             font-size: 14px;
             color: #8b8985;
             text-decoration: none;
-            margin-top: 10px;
+            margin-top: 5px;
             transition: color 0.2s;
         }
-        .back-link:hover {
-            color: var(--text-bright);
-        }
+        .back-link:hover { color: var(--text-bright); }
     </style>
 </head>
 <body>
@@ -167,6 +188,9 @@
 
     <div class="auth-card">
         <h2 id="formTitle" class="form-title">Войти в аккаунт</h2>
+
+        <div id="dangerAlert" class="alert-msg alert-danger"></div>
+        <div id="successAlert" class="alert-msg alert-success"></div>
 
         <div class="form-group">
             <label for="usernameInput">Имя пользователя</label>
@@ -207,20 +231,46 @@
         document.getElementById('submitBtn').innerText = tab === 'login' ? 'Войти' : 'Зарегистрироваться';
 
         document.getElementById('emailGroup').style.display = tab === 'register' ? 'flex' : 'none';
+
+        clearAlerts();
+        document.getElementById('usernameInput').value = '';
+        document.getElementById('passwordInput').value = '';
+        document.getElementById('emailInput').value = '';
+    }
+
+    function clearAlerts() {
+        document.getElementById('dangerAlert').style.display = 'none';
+        document.getElementById('successAlert').style.display = 'none';
+    }
+
+    function showError(message) {
+        clearAlerts();
+        const alert = document.getElementById('dangerAlert');
+        alert.innerText = message;
+        alert.style.display = 'block';
+    }
+
+    function showSuccess(message) {
+        clearAlerts();
+        const alert = document.getElementById('successAlert');
+        alert.innerText = message;
+        alert.style.display = 'block';
     }
 
     function handleFormSubmit() {
+        clearAlerts();
+
         const username = document.getElementById('usernameInput').value.trim();
         const password = document.getElementById('passwordInput').value;
         const email = document.getElementById('emailInput').value.trim();
 
         if (!username || !password) {
-            alert("Пожалуйста, заполните все поля.");
+            showError("Пожалуйста, заполните все поля.");
             return;
         }
 
         if (activeTab === 'register' && !email) {
-            alert("Пожалуйста, введите адрес электронной почты.");
+            showError("Пожалуйста, укажите адрес электронной почты.");
             return;
         }
 
@@ -239,7 +289,7 @@
             .then(response => {
                 if (!response.ok) {
                     throw new Error(activeTab === 'login'
-                        ? "Неверное имя пользователя или пароль (или почта не подтверждена)."
+                        ? "Неверный логин или пароль (возможно, почта не подтверждена)."
                         : "Имя пользователя или почта уже заняты."
                     );
                 }
@@ -247,10 +297,12 @@
             })
             .then(data => {
                 if (data.token === null) {
-                    alert("Регистрация успешна! Письмо со ссылкой для подтверждения отправлено на вашу почту. Пожалуйста, подтвердите аккаунт перед входом.");
-                    switchTab('login');
-                    document.getElementById('usernameInput').value = data.username;
-                    document.getElementById('passwordInput').value = '';
+                    showSuccess("Письмо со ссылкой для верификации отправлено на вашу почту. Пожалуйста, подтвердите аккаунт перед входом.");
+
+                    setTimeout(() => {
+                        switchTab('login');
+                        document.getElementById('usernameInput').value = data.username;
+                    }, 5000);
                 } else {
                     localStorage.setItem("jwt_token", data.token);
                     localStorage.setItem("username", data.username);
@@ -259,7 +311,7 @@
                 }
             })
             .catch(error => {
-                alert(error.message);
+                showError(error.message);
             });
     }
 </script>
