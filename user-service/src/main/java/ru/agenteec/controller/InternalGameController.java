@@ -8,6 +8,9 @@ import ru.agenteec.entity.User;
 import ru.agenteec.repository.GameHistoryRepository;
 import ru.agenteec.repository.UserRepository;
 
+import java.util.HashMap;
+import java.util.Map;
+
 @RestController
 @RequestMapping("/api/v1/internal/games")
 public class InternalGameController {
@@ -26,26 +29,47 @@ public class InternalGameController {
                 .orElse(ResponseEntity.notFound().build());
     }
     @PostMapping("/complete")
-    public ResponseEntity<String> completeGame(@RequestBody GameResultRequest request) {
+    public ResponseEntity<Map<String, Object>> completeGame(@RequestBody GameResultRequest request) {
+        String category = request.getCategory() != null ? request.getCategory().toUpperCase() : "RAPID";
+
         GameHistory history = new GameHistory();
         history.setGameId(request.getGameId());
         history.setWhitePlayer(request.getWhitePlayer());
         history.setBlackPlayer(request.getBlackPlayer());
         history.setResult(request.getResult());
         history.setPgn(request.getPgn());
+        history.setCategory(category);
         gameHistoryRepository.save(history);
 
         User white = userRepository.findByUsername(request.getWhitePlayer()).orElse(null);
         User black = userRepository.findByUsername(request.getBlackPlayer()).orElse(null);
 
+        Map<String, Object> responseMap = new HashMap<>();
+
         if (white != null && black != null) {
-            String category = request.getCategory() != null ? request.getCategory().toUpperCase() : "RAPID";
+            int oldRatingW = getRating(white, category);
+            int oldRatingB = getRating(black, category);
+
             calculateAndApplyElo(white, black, request.getResult(), category);
+
             userRepository.save(white);
             userRepository.save(black);
+
+            int newRatingW = getRating(white, category);
+            int newRatingB = getRating(black, category);
+
+            responseMap.put("whiteNewRating", newRatingW);
+            responseMap.put("whiteRatingChange", newRatingW - oldRatingW);
+            responseMap.put("blackNewRating", newRatingB);
+            responseMap.put("blackRatingChange", newRatingB - oldRatingB);
+        } else {
+            responseMap.put("whiteNewRating", 1500);
+            responseMap.put("whiteRatingChange", 0);
+            responseMap.put("blackNewRating", 1500);
+            responseMap.put("blackRatingChange", 0);
         }
 
-        return ResponseEntity.ok("Game completed");
+        return ResponseEntity.ok(responseMap);
     }
 
     private void calculateAndApplyElo(User white, User black, String result, String category) {
