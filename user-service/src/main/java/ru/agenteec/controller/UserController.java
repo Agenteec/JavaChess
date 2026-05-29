@@ -20,7 +20,16 @@ public class UserController {
         this.userRepository = userRepository;
         this.gameHistoryRepository = gameHistoryRepository;
     }
-
+    @GetMapping("/leaderboard")
+    public ResponseEntity<List<User>> getLeaderboard(@RequestParam("category") String category) {
+        List<User> topUsers = switch (category.toUpperCase()) {
+            case "BULLET" -> userRepository.findTop5ByOrderByRatingBulletDesc();
+            case "BLITZ" -> userRepository.findTop5ByOrderByRatingBlitzDesc();
+            case "CLASSICAL" -> userRepository.findTop5ByOrderByRatingClassicalDesc();
+            default -> userRepository.findTop5ByOrderByRatingRapidDesc();
+        };
+        return ResponseEntity.ok(topUsers);
+    }
     @GetMapping("/{username}")
     public ResponseEntity<User> getUserProfile(@PathVariable("username") String username) {
         return userRepository.findByUsername(username)
