@@ -34,7 +34,7 @@ elseif ($choice -eq "2") {
 
     Write-Host ">>> Triggering Docker container rebuild on VPS over SSH..." -ForegroundColor Cyan
     
-    ssh "${vps_user}@${vps_host}" "cd ${vps_project_path} && docker-compose up --build -d"
+    ssh "${vps_user}@${vps_host}" "cd ${vps_project_path} && docker compose up --build -d"
 
     if ($LASTEXITCODE -eq 0) {
         Write-Host "`n[SUCCESS] Backend deployed and Docker containers rebuilt successfully!" -ForegroundColor Green
