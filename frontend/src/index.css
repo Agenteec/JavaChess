@@ -1,0 +1,23 @@
+@import "tailwindcss";
+
+@keyframes pulse-yellow {
+    0% { box-shadow: 0 0 0 0 rgba(255, 204, 0, 0.7); }
+    70% { box-shadow: 0 0 0 10px rgba(255, 204, 0, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(255, 204, 0, 0); }
+}
+
+.pulse-active {
+    animation: pulse-yellow 1.5s infinite;
+}
+
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+::-webkit-scrollbar-track {
+    background: #161512;
+}
+::-webkit-scrollbar-thumb {
+    background: #363431;
+    border-radius: 3px;
+}
