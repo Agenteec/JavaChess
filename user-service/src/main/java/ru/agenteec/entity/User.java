@@ -33,6 +33,7 @@ public class User {
     private int gamesRapid = 0;
     private int gamesClassical = 0;
     private int gamesCorrespondence = 0;
+    private java.time.LocalDateTime createdAt = java.time.LocalDateTime.now();
 
     public User() {}
 
@@ -73,6 +74,9 @@ public class User {
 
     public String getVerificationToken() { return verificationToken; }
     public void setVerificationToken(String verificationToken) { this.verificationToken = verificationToken; }
+
+    public java.time.LocalDateTime getCreatedAt() { return createdAt; }
+    public void setCreatedAt(java.time.LocalDateTime createdAt) { this.createdAt = createdAt; }
 
 
 }

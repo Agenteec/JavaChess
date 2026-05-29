@@ -16,7 +16,15 @@ public class AuthController {
     public AuthController(AuthService authService) {
         this.authService = authService;
     }
-
+    @PostMapping("/resend")
+    public ResponseEntity<String> resendVerification(@RequestParam("email") String email) {
+        try {
+            authService.resendVerification(email);
+            return ResponseEntity.ok("Ссылка успешно отправлена повторно!");
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(e.getMessage());
+        }
+    }
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> register(@RequestBody RegisterRequest request) {
         return ResponseEntity.ok(authService.register(request));

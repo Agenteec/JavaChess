@@ -9,6 +9,7 @@ import ru.agenteec.entity.User;
 import ru.agenteec.repository.UserRepository;
 import ru.agenteec.security.JwtService;
 
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -32,6 +33,17 @@ public class AuthService {
             throw new RuntimeException("Email already in use!");
         }
 
+        Optional<User> existingEmailUser = userRepository.findByEmail(request.getEmail());
+        if (existingEmailUser.isPresent()) {
+            User user = existingEmailUser.get();
+            if (!user.isVerified()) {
+                userRepository.delete(user);
+                userRepository.flush();
+            } else {
+                throw new RuntimeException("Email already in use!");
+            }
+        }
+
         User user = new User();
         user.setUsername(request.getUsername());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
@@ -46,6 +58,12 @@ public class AuthService {
         user.setRatingRapid(1500);
         user.setRatingClassical(1500);
         user.setRatingCorrespondence(1500);
+
+        user.setGamesBullet(0);
+        user.setGamesBlitz(0);
+        user.setGamesRapid(0);
+        user.setGamesClassical(0);
+        user.setGamesCorrespondence(0);
 
         userRepository.save(user);
 
@@ -80,5 +98,20 @@ public class AuthService {
 
         String token = jwtService.generateToken(user.getUsername());
         return new AuthResponse(token, user.getUsername(), user.getRatingRapid());
+    }
+    public void resendVerification(String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Пользователь с такой почтой не найден!"));
+
+        if (user.isVerified()) {
+            throw new RuntimeException("Аккаунт уже успешно активирован!");
+        }
+
+        String newToken = UUID.randomUUID().toString();
+        user.setVerificationToken(newToken);
+        user.setCreatedAt(java.time.LocalDateTime.now());
+        userRepository.save(user);
+
+        mailService.sendVerificationEmail(user.getEmail(), newToken);
     }
 }
