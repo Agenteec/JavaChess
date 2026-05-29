@@ -111,7 +111,7 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
 
                 Map<String, String> redirectData = Map.of(
                         "type", "REDIRECT",
-                        "url", "play.html?room=" + gameUuid
+                        "url", "/?room=" + gameUuid
                 );
                 String json = objectMapper.writeValueAsString(redirectData);
 
