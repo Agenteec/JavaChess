@@ -21,7 +21,7 @@ public class MailService {
 
         try {
             SimpleMailMessage message = new SimpleMailMessage();
-            message.setFrom("no-reply@javachess.com");
+            message.setFrom("no-reply@agenteec-chess.ru");
             message.setTo(toEmail);
             message.setSubject("Подтверждение аккаунта в Java Chess");
             message.setText("Добро пожаловать в Java Chess!\n\n" +
