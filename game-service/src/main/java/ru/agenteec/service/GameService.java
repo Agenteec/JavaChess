@@ -3,6 +3,7 @@ package ru.agenteec.service;
 import com.github.bhlangonijr.chesslib.Board;
 import com.github.bhlangonijr.chesslib.Square;
 import com.github.bhlangonijr.chesslib.move.Move;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -14,13 +15,14 @@ import java.util.concurrent.TimeUnit;
 
 @Service
 public class GameService {
-
+    private final String userServiceUrl;
     private final StringRedisTemplate redisTemplate;
     private static final String START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
     private final org.springframework.web.client.RestTemplate restTemplate = new org.springframework.web.client.RestTemplate();
 
-    public GameService(StringRedisTemplate redisTemplate) {
+    public GameService(StringRedisTemplate redisTemplate, @Value("${app.user-service.internal-url}") String userServiceUrl) {
         this.redisTemplate = redisTemplate;
+        this.userServiceUrl = userServiceUrl;
     }
 
     public String getOrCreateGame(String gameId) {
@@ -103,12 +105,28 @@ public class GameService {
     public long[] getGameTimes(String gameId) {
         String whiteTimeKey = "chess:game:" + gameId + ":time:white";
         String blackTimeKey = "chess:game:" + gameId + ":time:black";
+        String lastMoveKey = "chess:game:" + gameId + ":last_move_time";
 
         String wStr = redisTemplate.opsForValue().get(whiteTimeKey);
         String bStr = redisTemplate.opsForValue().get(blackTimeKey);
 
         long whiteTime = wStr != null ? Long.parseLong(wStr) : 600;
         long blackTime = bStr != null ? Long.parseLong(bStr) : 600;
+
+        Board board = getBoardState(gameId);
+        if (!board.getHistory().isEmpty()) {
+            String activeColor = board.getSideToMove().toString();
+            long now = System.currentTimeMillis();
+            String lastMoveStr = redisTemplate.opsForValue().get(lastMoveKey);
+            long lastMoveTime = lastMoveStr != null ? Long.parseLong(lastMoveStr) : now;
+            long elapsedSeconds = (now - lastMoveTime) / 1000;
+
+            if (activeColor.equalsIgnoreCase("WHITE")) {
+                whiteTime = Math.max(0, whiteTime - elapsedSeconds);
+            } else {
+                blackTime = Math.max(0, blackTime - elapsedSeconds);
+            }
+        }
 
         return new long[]{whiteTime, blackTime};
     }
@@ -118,8 +136,8 @@ public class GameService {
 
         if (moves == null || moves.isEmpty()) {
             try {
-                String userServiceUrl = "http://localhost:8081/api/v1/internal/games/" + gameId;
-                Map<?, ?> history = restTemplate.getForObject(userServiceUrl, Map.class);
+                String url = userServiceUrl + "/api/v1/internal/games/" + gameId;
+                Map<?, ?> history = restTemplate.getForObject(url, Map.class);
 
                 if (history != null && history.get("pgn") != null) {
                     String pgn = (String) history.get("pgn");
