@@ -23,10 +23,10 @@ public class UserController {
     @GetMapping("/leaderboard")
     public ResponseEntity<List<User>> getLeaderboard(@RequestParam("category") String category) {
         List<User> topUsers = switch (category.toUpperCase()) {
-            case "BULLET" -> userRepository.findTop5ByOrderByRatingBulletDesc();
-            case "BLITZ" -> userRepository.findTop5ByOrderByRatingBlitzDesc();
-            case "CLASSICAL" -> userRepository.findTop5ByOrderByRatingClassicalDesc();
-            default -> userRepository.findTop5ByOrderByRatingRapidDesc();
+            case "BULLET" -> userRepository.findTop10ByOrderByRatingBulletDesc();
+            case "BLITZ" -> userRepository.findTop10ByOrderByRatingBlitzDesc();
+            case "CLASSICAL" -> userRepository.findTop10ByOrderByRatingClassicalDesc();
+            default -> userRepository.findTop10ByOrderByRatingRapidDesc();
         };
         return ResponseEntity.ok(topUsers);
     }
