@@ -214,7 +214,8 @@
 </div>
 
 <script>
-    const USER_SERVICE_URL = "http://localhost:8081/api/v1/auth";
+    const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    const USER_SERVICE_URL = isLocal ? "http://localhost:8081/api/v1/auth" : window.location.origin + "/api/v1/auth";
     let activeTab = 'login';
 
     window.onload = function() {
