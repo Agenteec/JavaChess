@@ -1,2 +1,4 @@
 .idea/
 docker-compose.yml
+frontend/node_modules/
+frontend/package-lock.json
