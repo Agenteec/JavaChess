@@ -193,6 +193,7 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
         String black = gameService.getPlayerColor(gameId, "black");
         boolean isArchived = false;
         String archiveResult = null;
+        Integer archWhiteRating = null, archBlackRating = null, archWhiteChange = null, archBlackChange = null;
 
         if (white == null && black == null) {
             try {
@@ -202,6 +203,10 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
                     white = (String) history.get("whitePlayer");
                     black = (String) history.get("blackPlayer");
                     archiveResult = (String) history.get("result");
+                    archWhiteRating = toInt(history.get("whiteRating"));
+                    archBlackRating = toInt(history.get("blackRating"));
+                    archWhiteChange = toInt(history.get("whiteRatingChange"));
+                    archBlackChange = toInt(history.get("blackRatingChange"));
                     isArchived = true;
                 }
             } catch (Exception e) {
@@ -209,29 +214,55 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
             }
         }
 
-        if (white == null && !isArchived) {
-            gameService.assignPlayerColor(gameId, userId);
-            int mins = payload.getMinutes() != null ? payload.getMinutes() : 10;
-            int inc = payload.getIncrement() != null ? payload.getIncrement() : 0;
-            gameService.initGameTime(gameId, mins, inc);
+        boolean lobbyVisible = false;
+        if (!isArchived) {
+            if (white == null && black == null) {
+                int mins = payload.getMinutes() != null ? payload.getMinutes() : 10;
+                int inc = payload.getIncrement() != null ? payload.getIncrement() : 0;
+                gameService.initGameTime(gameId, mins, inc);
 
-            String category = "RAPID";
-            if (mins < 3) category = "BULLET";
-            else if (mins < 10) category = "BLITZ";
-            else if (mins > 30) category = "CLASSICAL";
+                String category = "RAPID";
+                if (mins < 3) category = "BULLET";
+                else if (mins < 10) category = "BLITZ";
+                else if (mins > 30) category = "CLASSICAL";
+                gameService.setGameCategory(gameId, category);
 
-            gameService.setGameCategory(gameId, category);
-            white = userId;
-        } else if (black == null && !userId.equals(white) && !isArchived) {
-            gameService.assignPlayerColor(gameId, userId);
-            black = userId;
+                gameService.setVariant(gameId, payload.getVariant());
 
-            String lastMoveKey = "chess:game:" + gameId + ":last_move_time";
-            gameService.updateTimeOnMove(gameId, "WHITE");
+                boolean rated = !Boolean.FALSE.equals(payload.getRated());
+                if (userId.startsWith("anon-")) rated = false;
+                gameService.setRated(gameId, rated);
+
+                String colorChoice = payload.getColor() != null ? payload.getColor().toUpperCase() : "WHITE";
+                if (rated || "RANDOM".equals(colorChoice)) {
+                    colorChoice = Math.random() < 0.5 ? "WHITE" : "BLACK";
+                }
+                if ("BLACK".equals(colorChoice)) {
+                    gameService.setColorAssignment(gameId, "black", userId);
+                    black = userId;
+                } else {
+                    gameService.setColorAssignment(gameId, "white", userId);
+                    white = userId;
+                }
+                lobbyVisible = rated || Boolean.TRUE.equals(payload.getLobby());
+                gameService.setLobbyVisible(gameId, lobbyVisible);
+            } else if (white == null && !userId.equals(black)) {
+                gameService.setColorAssignment(gameId, "white", userId);
+                white = userId;
+                gameService.updateTimeOnMove(gameId, "WHITE");
+            } else if (black == null && !userId.equals(white)) {
+                gameService.setColorAssignment(gameId, "black", userId);
+                black = userId;
+                gameService.updateTimeOnMove(gameId, "WHITE");
+            }
         }
 
-        if (gameService.getPlayerColor(gameId, "black") == null && !isArchived) {
-            gameService.addOpenChallenge(gameId);
+        boolean stillWaiting = !isArchived && (gameService.getPlayerColor(gameId, "white") == null
+                || gameService.getPlayerColor(gameId, "black") == null);
+        if (stillWaiting) {
+            if (gameService.isLobbyVisible(gameId)) {
+                gameService.addOpenChallenge(gameId);
+            }
         } else {
             gameService.removeOpenChallenge(gameId);
         }
@@ -294,6 +325,15 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
             }
         }
 
+        if (isArchived) {
+            if (archWhiteRating != null) whiteRating = archWhiteRating;
+            if (archBlackRating != null) blackRating = archBlackRating;
+            response.setWhiteNewRating(archWhiteRating);
+            response.setBlackNewRating(archBlackRating);
+            response.setWhiteRatingChange(archWhiteChange);
+            response.setBlackRatingChange(archBlackChange);
+        }
+
         String whiteNameFormatted = (white == null) ? "Ожидание..." : (white.startsWith("anon-") ? "Anonymous" : white);
         String blackNameFormatted = (black == null) ? "Ожидание..." : (black.startsWith("anon-") ? "Anonymous" : black);
 
@@ -303,10 +343,17 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
         baseMap.put("blackPlayer", blackNameFormatted);
         baseMap.put("whiteRating", whiteRating);
         baseMap.put("blackRating", blackRating);
+        baseMap.put("rated", gameService.isRated(gameId));
+        baseMap.put("variant", gameService.getVariant(gameId));
 
         Map<String, Object> selfMap = new HashMap<>(baseMap);
         selfMap.put("role", isArchived ? "SPECTATOR" : userRole);
         session.sendMessage(new TextMessage(objectMapper.writeValueAsString(selfMap)));
+
+        Map<String, Object> chatHistory = new HashMap<>();
+        chatHistory.put("type", "CHAT_HISTORY");
+        chatHistory.put("messages", gameService.getChatMessages(gameId));
+        session.sendMessage(new TextMessage(objectMapper.writeValueAsString(chatHistory)));
 
         Set<WebSocketSession> sessions = roomSessions.get(gameId);
         if (sessions != null) {
@@ -401,12 +448,33 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
 
 
     private void handleDrawOffer(WebSocketSession session, GameMessage payload) throws IOException {
+        String gameId = payload.getGameId();
         String sender = (String) session.getAttributes().get("username");
-        broadcastToRoom(payload.getGameId(), new GameResponse("DRAW_OFFER_RECEIVED", sender, "Предложена ничья"));
+        String white = gameService.getPlayerColor(gameId, "white");
+        String black = gameService.getPlayerColor(gameId, "black");
+
+        GameResponse offer = new GameResponse("DRAW_OFFER_RECEIVED", sender, "Предложена ничья");
+        String json = objectMapper.writeValueAsString(offer);
+
+        Set<WebSocketSession> sessions = roomSessions.get(gameId);
+        if (sessions != null) {
+            for (WebSocketSession s : sessions) {
+                if (s == session || !s.isOpen()) continue;
+                String uid = (String) s.getAttributes().get("userId");
+                if (uid != null && (uid.equals(white) || uid.equals(black))) {
+                    s.sendMessage(new TextMessage(json));
+                }
+            }
+        }
     }
 
     private void handleDrawAccept(WebSocketSession session, GameMessage payload) throws IOException {
         String gameId = payload.getGameId();
+
+        String userId = (String) session.getAttributes().get("userId");
+        String w = gameService.getPlayerColor(gameId, "white");
+        String b = gameService.getPlayerColor(gameId, "black");
+        if (userId == null || (!userId.equals(w) && !userId.equals(b))) return;
 
         if (gameService.isGameFinished(gameId)) return;
 
@@ -491,6 +559,7 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
 
     private void handleChat(WebSocketSession session, GameMessage payload) throws IOException {
         String username = (String) session.getAttributes().get("username");
+        gameService.addChatMessage(payload.getGameId(), username, payload.getMessage());
         GameResponse response = new GameResponse("CHAT", username, payload.getMessage());
         broadcastToRoom(payload.getGameId(), response);
     }
@@ -549,6 +618,7 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
             request.put("result", result);
             request.put("category", category);
             request.put("pgn", board.getHistory().toString());
+            request.put("rated", gameService.isRated(gameId));
 
             String targetUrl = this.userServiceUrl + "/api/v1/internal/games/complete";
             var responseEntity = restTemplate.postForEntity(targetUrl, request, Map.class);
@@ -557,6 +627,10 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
             System.err.println("Ошибка отправки результатов игры: " + e.getMessage());
             return null;
         }
+    }
+
+    private Integer toInt(Object val) {
+        return val instanceof Number ? ((Number) val).intValue() : null;
     }
 
     private int getCategoryRating(Map<?, ?> userMap, String category) {

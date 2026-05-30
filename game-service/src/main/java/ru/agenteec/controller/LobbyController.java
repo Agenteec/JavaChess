@@ -29,6 +29,7 @@ public class LobbyController {
         if (openGameIds != null) {
             for (String gameId : openGameIds) {
                 String creator = gameService.getPlayerColor(gameId, "white");
+                if (creator == null) creator = gameService.getPlayerColor(gameId, "black");
                 if (creator == null) continue;
 
                 String category = gameService.getGameCategory(gameId);
@@ -37,6 +38,10 @@ public class LobbyController {
                 challenge.put("roomId", gameId);
                 challenge.put("player", creator.startsWith("anon-") ? "Anonymous" : creator);
                 challenge.put("type", category);
+                challenge.put("rated", gameService.isRated(gameId));
+                challenge.put("variant", gameService.getVariant(gameId));
+                long[] times = gameService.getGameTimes(gameId);
+                challenge.put("time", (Math.max(times[0], times[1]) / 60) + " мин");
 
                 int rating = 1500;
                 try {

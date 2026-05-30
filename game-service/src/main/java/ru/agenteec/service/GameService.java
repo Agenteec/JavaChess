@@ -169,6 +169,32 @@ public class GameService {
         redisTemplate.opsForValue().set("chess:game:" + gameId + ":category", category.toUpperCase(), 1, TimeUnit.DAYS);
     }
 
+    private static final String CHAT_DELIM = "\n";
+
+    public void addChatMessage(String gameId, String sender, String message) {
+        String key = "chess:game:" + gameId + ":chat";
+        String safeSender = sender == null ? "" : sender.replace(CHAT_DELIM, " ");
+        String safeMessage = message == null ? "" : message.replace(CHAT_DELIM, " ");
+        redisTemplate.opsForList().rightPush(key, safeSender + CHAT_DELIM + safeMessage);
+        redisTemplate.opsForList().trim(key, -200, -1);
+        redisTemplate.expire(key, 1, TimeUnit.DAYS);
+    }
+
+    public List<Map<String, String>> getChatMessages(String gameId) {
+        List<String> raw = redisTemplate.opsForList().range("chess:game:" + gameId + ":chat", 0, -1);
+        List<Map<String, String>> result = new ArrayList<>();
+        if (raw != null) {
+            for (String r : raw) {
+                int idx = r.indexOf(CHAT_DELIM);
+                Map<String, String> m = new HashMap<>();
+                m.put("sender", idx >= 0 ? r.substring(0, idx) : "");
+                m.put("message", idx >= 0 ? r.substring(idx + 1) : r);
+                result.add(m);
+            }
+        }
+        return result;
+    }
+
     public void addOpenChallenge(String gameId) {
         redisTemplate.opsForSet().add("chess:lobby:challenges", gameId);
     }
@@ -184,6 +210,36 @@ public class GameService {
     public String getGameCategory(String gameId) {
         String cat = redisTemplate.opsForValue().get("chess:game:" + gameId + ":category");
         return cat != null ? cat.toUpperCase() : "RAPID";
+    }
+
+    public void setColorAssignment(String gameId, String color, String username) {
+        redisTemplate.opsForValue().set("chess:game:" + gameId + ":" + color.toLowerCase(), username, 1, TimeUnit.DAYS);
+    }
+
+    public void setRated(String gameId, boolean rated) {
+        redisTemplate.opsForValue().set("chess:game:" + gameId + ":rated", String.valueOf(rated), 1, TimeUnit.DAYS);
+    }
+
+    public boolean isRated(String gameId) {
+        String v = redisTemplate.opsForValue().get("chess:game:" + gameId + ":rated");
+        return v == null || Boolean.parseBoolean(v);
+    }
+
+    public void setVariant(String gameId, String variant) {
+        redisTemplate.opsForValue().set("chess:game:" + gameId + ":variant", variant == null ? "STANDARD" : variant.toUpperCase(), 1, TimeUnit.DAYS);
+    }
+
+    public String getVariant(String gameId) {
+        String v = redisTemplate.opsForValue().get("chess:game:" + gameId + ":variant");
+        return v != null ? v.toUpperCase() : "STANDARD";
+    }
+
+    public void setLobbyVisible(String gameId, boolean visible) {
+        redisTemplate.opsForValue().set("chess:game:" + gameId + ":lobby", String.valueOf(visible), 1, TimeUnit.DAYS);
+    }
+
+    public boolean isLobbyVisible(String gameId) {
+        return Boolean.parseBoolean(redisTemplate.opsForValue().get("chess:game:" + gameId + ":lobby"));
     }
 
 
