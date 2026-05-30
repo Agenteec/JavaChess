@@ -113,7 +113,7 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
 
                 Map<String, String> redirectData = Map.of(
                         "type", "REDIRECT",
-                        "url", "/?room=" + gameUuid
+                        "url", "/?room=" + gameUuid + "&mins=" + mins + "&inc=" + inc
                 );
                 String json = objectMapper.writeValueAsString(redirectData);
 
@@ -502,8 +502,9 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
             if (white == null || black == null) return;
 
             Board board = gameService.getBoardState(gameId);
-            int movesCount = board.getHistory().size();
+            int movesCount = gameService.getGameMoves(gameId).size();
 
+            // Если время вышло до совершения первых ходов (меньше 2 ходов в сумме)
             if (movesCount < 2) {
                 GameResponse response = new GameResponse("STATE", board.getFen(), "WHITE", true, false, 0, 0);
                 response.setLastMove("ABORTED");

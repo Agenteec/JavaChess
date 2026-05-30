@@ -117,8 +117,8 @@ public class GameService {
             return new long[]{whiteTime, blackTime};
         }
 
-        Board board = getBoardState(gameId);
-        int movesCount = board.getHistory().size();
+        List<String> moves = getGameMoves(gameId);
+        int movesCount = moves.size();
 
         long now = System.currentTimeMillis();
         String lastMoveStr = redisTemplate.opsForValue().get(lastMoveKey);
@@ -130,8 +130,7 @@ public class GameService {
         } else if (movesCount == 1) {
             blackTime = Math.max(0, 15 - elapsedSeconds);
         } else {
-            String activeColor = board.getSideToMove().toString();
-            if (activeColor.equalsIgnoreCase("WHITE")) {
+            if (movesCount % 2 == 0) {
                 whiteTime = Math.max(0, whiteTime - elapsedSeconds);
             } else {
                 blackTime = Math.max(0, blackTime - elapsedSeconds);
@@ -140,6 +139,8 @@ public class GameService {
 
         return new long[]{whiteTime, blackTime};
     }
+
+
 
     public List<String> getGameMoves(String gameId) {
         String key = "chess:game:" + gameId + ":moves";
@@ -191,8 +192,8 @@ public class GameService {
         String lastMoveKey = "chess:game:" + gameId + ":last_move_time";
 
         long now = System.currentTimeMillis();
-        Board board = getBoardState(gameId);
-        int movesCount = board.getHistory().size();
+        List<String> moves = getGameMoves(gameId);
+        int movesCount = moves.size();
 
         if (movesCount <= 2) {
             redisTemplate.opsForValue().set(lastMoveKey, String.valueOf(now), 1, TimeUnit.DAYS);
