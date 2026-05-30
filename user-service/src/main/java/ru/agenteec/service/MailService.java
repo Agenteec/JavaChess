@@ -41,4 +41,29 @@ public class MailService {
             System.out.println("==========================================================================");
         }
     }
+
+    public void sendPasswordResetEmail(String toEmail, String token) {
+        String resetUrl = baseUrl + "/?reset=" + token;
+
+        try {
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setFrom("no-reply@agenteec-chess.ru");
+            message.setTo(toEmail);
+            message.setSubject("Сброс пароля в Agenteec Chess");
+            message.setText("Вы запросили сброс пароля.\n\n" +
+                    "Чтобы задать новый пароль, перейдите по ссылке (действует 1 час):\n" +
+                    resetUrl + "\n\n" +
+                    "Если вы не запрашивали сброс пароля, просто проигнорируйте это письмо — ваш пароль не изменится.");
+
+            mailSender.send(message);
+            System.out.println(">>> Письмо сброса пароля отправлено на адрес: " + toEmail);
+
+        } catch (Exception e) {
+            System.err.println(">>> Не удалось отправить письмо сброса на " + toEmail + ". Причина: " + e.getMessage());
+            System.out.println("==========================================================================");
+            System.out.println(">>> ССЫЛКА ДЛЯ РУЧНОГО СБРОСА ПАРОЛЯ:");
+            System.out.println(">>> " + resetUrl);
+            System.out.println("==========================================================================");
+        }
+    }
 }
