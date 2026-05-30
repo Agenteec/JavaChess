@@ -22,12 +22,14 @@ public class InternalGameController {
         this.gameHistoryRepository = gameHistoryRepository;
         this.userRepository = userRepository;
     }
+
     @GetMapping("/{gameId}")
     public ResponseEntity<GameHistory> getGameHistory(@PathVariable("gameId") String gameId) {
         return gameHistoryRepository.findByGameId(gameId)
                 .map(ResponseEntity::ok)
                 .orElse(ResponseEntity.notFound().build());
     }
+
     @PostMapping("/complete")
     public ResponseEntity<Map<String, Object>> completeGame(@RequestBody GameResultRequest request) {
         String category = request.getCategory() != null ? request.getCategory().toUpperCase() : "RAPID";
@@ -46,7 +48,7 @@ public class InternalGameController {
 
         Map<String, Object> responseMap = new HashMap<>();
 
-        if (white != null && black != null) {
+        if (white != null && black != null && !"ABORTED".equals(request.getResult())) {
             int oldRatingW = getRating(white, category);
             int oldRatingB = getRating(black, category);
 
@@ -63,9 +65,11 @@ public class InternalGameController {
             responseMap.put("blackNewRating", newRatingB);
             responseMap.put("blackRatingChange", newRatingB - oldRatingB);
         } else {
-            responseMap.put("whiteNewRating", 1500);
+            int rW = white != null ? getRating(white, category) : 1500;
+            int rB = black != null ? getRating(black, category) : 1500;
+            responseMap.put("whiteNewRating", rW);
             responseMap.put("whiteRatingChange", 0);
-            responseMap.put("blackNewRating", 1500);
+            responseMap.put("blackNewRating", rB);
             responseMap.put("blackRatingChange", 0);
         }
 
