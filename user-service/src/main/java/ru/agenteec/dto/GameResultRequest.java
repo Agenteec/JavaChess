@@ -7,7 +7,10 @@ public class GameResultRequest {
     private String result;
     private String pgn;
     private String category;
+    private Boolean rated;
 
+    public Boolean getRated() { return rated; }
+    public void setRated(Boolean rated) { this.rated = rated; }
     public String getGameId() { return gameId; }
     public void setGameId(String gameId) { this.gameId = gameId; }
     public String getWhitePlayer() { return whitePlayer; }

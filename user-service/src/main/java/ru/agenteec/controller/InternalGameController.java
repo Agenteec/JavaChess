@@ -41,14 +41,15 @@ public class InternalGameController {
         history.setResult(request.getResult());
         history.setPgn(request.getPgn());
         history.setCategory(category);
-        gameHistoryRepository.save(history);
 
         User white = userRepository.findByUsername(request.getWhitePlayer()).orElse(null);
         User black = userRepository.findByUsername(request.getBlackPlayer()).orElse(null);
 
+        boolean rated = request.getRated() == null || request.getRated();
+
         Map<String, Object> responseMap = new HashMap<>();
 
-        if (white != null && black != null && !"ABORTED".equals(request.getResult())) {
+        if (rated && white != null && black != null && !"ABORTED".equals(request.getResult())) {
             int oldRatingW = getRating(white, category);
             int oldRatingB = getRating(black, category);
 
@@ -59,6 +60,11 @@ public class InternalGameController {
 
             int newRatingW = getRating(white, category);
             int newRatingB = getRating(black, category);
+
+            history.setWhiteRating(newRatingW);
+            history.setBlackRating(newRatingB);
+            history.setWhiteRatingChange(newRatingW - oldRatingW);
+            history.setBlackRatingChange(newRatingB - oldRatingB);
 
             responseMap.put("whiteNewRating", newRatingW);
             responseMap.put("whiteRatingChange", newRatingW - oldRatingW);
@@ -71,7 +77,14 @@ public class InternalGameController {
             responseMap.put("whiteRatingChange", 0);
             responseMap.put("blackNewRating", rB);
             responseMap.put("blackRatingChange", 0);
+
+            history.setWhiteRating(rW);
+            history.setBlackRating(rB);
+            history.setWhiteRatingChange(0);
+            history.setBlackRatingChange(0);
         }
+
+        gameHistoryRepository.save(history);
 
         return ResponseEntity.ok(responseMap);
     }

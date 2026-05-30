@@ -20,6 +20,11 @@ public class GameHistory {
     @Column(length = 2000)
     private String pgn;
 
+    private Integer whiteRating;
+    private Integer blackRating;
+    private Integer whiteRatingChange;
+    private Integer blackRatingChange;
+
     private LocalDateTime endedAt = LocalDateTime.now();
 
     public GameHistory() {}
@@ -40,4 +45,12 @@ public class GameHistory {
     public void setEndedAt(LocalDateTime endedAt) { this.endedAt = endedAt; }
     public String getCategory() { return category; }
     public void setCategory(String category) { this.category = category; }
+    public Integer getWhiteRating() { return whiteRating; }
+    public void setWhiteRating(Integer whiteRating) { this.whiteRating = whiteRating; }
+    public Integer getBlackRating() { return blackRating; }
+    public void setBlackRating(Integer blackRating) { this.blackRating = blackRating; }
+    public Integer getWhiteRatingChange() { return whiteRatingChange; }
+    public void setWhiteRatingChange(Integer whiteRatingChange) { this.whiteRatingChange = whiteRatingChange; }
+    public Integer getBlackRatingChange() { return blackRatingChange; }
+    public void setBlackRatingChange(Integer blackRatingChange) { this.blackRatingChange = blackRatingChange; }
 }
