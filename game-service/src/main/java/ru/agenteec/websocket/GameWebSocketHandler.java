@@ -9,6 +9,7 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 import ru.agenteec.dto.GameMessage;
 import ru.agenteec.dto.GameResponse;
 import ru.agenteec.service.GameService;
+import ru.agenteec.security.JwtService;
 
 import java.io.IOException;
 import java.util.*;
@@ -17,7 +18,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 
 @Component
 public class GameWebSocketHandler extends TextWebSocketHandler {
-
+    private final JwtService jwtService;
     private final GameService gameService;
     private final String userServiceUrl;
     private final ObjectMapper objectMapper = new ObjectMapper();
@@ -28,9 +29,12 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
 
     private final org.springframework.web.client.RestTemplate restTemplate = new org.springframework.web.client.RestTemplate();
 
-    public GameWebSocketHandler(GameService gameService, @Value("${app.user-service.internal-url}") String userServiceUrl) {
+    public GameWebSocketHandler(GameService gameService,
+                                @Value("${app.user-service.internal-url}") String userServiceUrl,
+                                JwtService jwtService) {
         this.gameService = gameService;
         this.userServiceUrl = userServiceUrl;
+        this.jwtService = jwtService;
     }
 
     @Override
@@ -67,7 +71,12 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
                     handleDrawDecline(session, payload);
                     break;
                 case "CHAT":
-                    handleChat(payload);
+                    handleChat(session, payload);
+                    break;
+                case "PING":
+                    if (session.isOpen()) {
+                        session.sendMessage(new TextMessage("{\"type\":\"PONG\"}"));
+                    }
                     break;
                 default:
                     sendError(session, "Неизвестное действие: " + action);
@@ -79,60 +88,106 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
 
     private void handleMatchmakingQueue(WebSocketSession session, GameMessage payload) throws IOException {
         String category = payload.getCategory().toUpperCase();
-        Queue<WebSocketSession> queue = matchmakingQueues.computeIfAbsent(category, k -> new ConcurrentLinkedQueue<>());
+        String requestedUsername = payload.getUsername();
+        String token = payload.getToken();
+
+        String validatedUsername = null;
+        String role = null;
+        if (token != null && !token.isBlank()) {
+            validatedUsername = jwtService.extractUsername(token);
+            role = jwtService.extractRole(token);
+        }
+
+        if (validatedUsername == null) {
+            if (requestedUsername != null && requestedUsername.startsWith("Guest_")) {
+                validatedUsername = requestedUsername;
+                role = "ROLE_GUEST";
+            } else {
+                sendError(session, "Ошибка авторизации: требуется войти в систему.");
+                session.close(CloseStatus.POLICY_VIOLATION);
+                return;
+            }
+        }
+
+        session.getAttributes().put("username", validatedUsername);
+        session.getAttributes().put("role", role);
+
+        String roleFromSession = (String) session.getAttributes().get("role");
+        String queueKey = "ROLE_GUEST".equals(roleFromSession) ? category + "_GUEST" : category;
+
+        Queue<WebSocketSession> queue = matchmakingQueues.computeIfAbsent(queueKey, k -> new ConcurrentLinkedQueue<>());
 
         session.getAttributes().put("minutes", payload.getMinutes() != null ? payload.getMinutes() : 10);
         session.getAttributes().put("increment", payload.getIncrement() != null ? payload.getIncrement() : 0);
 
-        String username = (String) session.getAttributes().get("username");
-
+        String username = validatedUsername;
+        queue.removeIf(s -> !s.isOpen());
         queue.removeIf(s -> username.equals(s.getAttributes().get("username")));
         queue.add(session);
 
-        if (queue.size() >= 2) {
+        while (queue.size() >= 2) {
             WebSocketSession player1 = queue.poll();
+            if (player1 == null) break;
+            if (!player1.isOpen()) continue;
+
             WebSocketSession player2 = queue.poll();
+            if (player2 == null) { queue.add(player1); break; }
+            if (!player2.isOpen()) { queue.add(player1); continue; }
 
-            if (player1 != null && player2 != null && player1.isOpen() && player2.isOpen()) {
-                String gameUuid = UUID.randomUUID().toString();
+            String gameUuid = UUID.randomUUID().toString();
 
-                String u1 = (String) player1.getAttributes().get("username");
-                String u2 = (String) player2.getAttributes().get("username");
+            String u1 = (String) player1.getAttributes().get("username");
+            String u2 = (String) player2.getAttributes().get("username");
 
-                if (Math.random() > 0.5) {
-                    gameService.assignPlayerColor(gameUuid, u1);
-                } else {
-                    gameService.assignPlayerColor(gameUuid, u2);
-                }
-                gameService.assignPlayerColor(gameUuid, u1.equals(gameService.getPlayerColor(gameUuid, "white")) ? u2 : u1);
+            String whiteUser = Math.random() > 0.5 ? u1 : u2;
+            String blackUser = whiteUser.equals(u1) ? u2 : u1;
+            gameService.assignPlayerColor(gameUuid, whiteUser);
+            gameService.assignPlayerColor(gameUuid, blackUser);
 
-                int mins = (int) player1.getAttributes().getOrDefault("minutes", 10);
-                int inc = (int) player1.getAttributes().getOrDefault("increment", 0);
-                gameService.initGameTime(gameUuid, mins, inc);
-                gameService.setGameCategory(gameUuid, category);
+            int mins = (int) player1.getAttributes().getOrDefault("minutes", 10);
+            int inc = (int) player1.getAttributes().getOrDefault("increment", 0);
+            gameService.initGameTime(gameUuid, mins, inc);
+            gameService.setGameCategory(gameUuid, category);
 
-                Map<String, String> redirectData = Map.of(
-                        "type", "REDIRECT",
-                        "url", "/?room=" + gameUuid + "&mins=" + mins + "&inc=" + inc
-                );
-                String json = objectMapper.writeValueAsString(redirectData);
+            Map<String, String> redirectData = Map.of(
+                    "type", "REDIRECT",
+                    "url", "/?room=" + gameUuid + "&mins=" + mins + "&inc=" + inc
+            );
+            String json = objectMapper.writeValueAsString(redirectData);
 
-                player1.sendMessage(new TextMessage(json));
-                player2.sendMessage(new TextMessage(json));
-            }
+            player1.sendMessage(new TextMessage(json));
+            player2.sendMessage(new TextMessage(json));
+            break;
         }
     }
 
+
     private void handleJoin(WebSocketSession session, GameMessage payload) throws IOException {
         String gameId = payload.getGameId();
-        String username = payload.getUsername();
+        String token = payload.getToken();
+
+        if (token == null || token.isBlank()) {
+            sendError(session, "Ошибка доступа: отсутствует токен авторизации.");
+            session.close(CloseStatus.POLICY_VIOLATION);
+            return;
+        }
+
+        String userId = jwtService.extractUsername(token);
+        String displayName = jwtService.extractDisplayName(token);
+        String role = jwtService.extractRole(token);
+
+        if (userId == null || role == null) {
+            sendError(session, "Ошибка доступа: недействительный токен.");
+            session.close(CloseStatus.POLICY_VIOLATION);
+            return;
+        }
+
+        session.getAttributes().put("userId", userId);
+        session.getAttributes().put("username", displayName);
+        session.getAttributes().put("role", role);
 
         roomSessions.computeIfAbsent(gameId, k -> Collections.synchronizedSet(new HashSet<>())).add(session);
         sessionRooms.put(session.getId(), gameId);
-
-        if (username == null || username.isBlank()) {
-            username = "Guest_" + Math.floor(1000 + Math.random() * 9000);
-        }
 
         String white = gameService.getPlayerColor(gameId, "white");
         String black = gameService.getPlayerColor(gameId, "black");
@@ -155,8 +210,7 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
         }
 
         if (white == null && !isArchived) {
-            gameService.assignPlayerColor(gameId, username);
-
+            gameService.assignPlayerColor(gameId, userId);
             int mins = payload.getMinutes() != null ? payload.getMinutes() : 10;
             int inc = payload.getIncrement() != null ? payload.getIncrement() : 0;
             gameService.initGameTime(gameId, mins, inc);
@@ -167,10 +221,10 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
             else if (mins > 30) category = "CLASSICAL";
 
             gameService.setGameCategory(gameId, category);
-            white = username;
-        } else if (black == null && !username.equals(white) && !isArchived) {
-            gameService.assignPlayerColor(gameId, username);
-            black = username;
+            white = userId;
+        } else if (black == null && !userId.equals(white) && !isArchived) {
+            gameService.assignPlayerColor(gameId, userId);
+            black = userId;
 
             String lastMoveKey = "chess:game:" + gameId + ":last_move_time";
             gameService.updateTimeOnMove(gameId, "WHITE");
@@ -182,28 +236,36 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
             gameService.removeOpenChallenge(gameId);
         }
 
-        String role = "SPECTATOR";
-        if (username.equals(white)) role = "WHITE";
-        else if (username.equals(black)) role = "BLACK";
+        String userRole = "SPECTATOR";
+        if (userId.equals(white)) userRole = "WHITE";
+        else if (userId.equals(black)) userRole = "BLACK";
 
         String fen = gameService.getOrCreateGame(gameId);
         Board board = gameService.getBoardState(gameId);
-
         long[] times = gameService.getGameTimes(gameId);
 
-        boolean isMated = board.isMated() || isArchived;
+        String[] stored = gameService.getGameResult(gameId);
+        String finalResult = isArchived ? archiveResult : (stored != null ? stored[0] : null);
+        String finalReason = isArchived ? null : (stored != null ? stored[1] : null);
+        boolean finished = finalResult != null;
+
+        long wTime = times[0], bTime = times[1];
+        if (!isArchived && stored != null && stored[2] != null && stored[3] != null) {
+            try { wTime = Long.parseLong(stored[2]); bTime = Long.parseLong(stored[3]); } catch (Exception ignored) {}
+        }
+
+        boolean isMated = board.isMated() || finished;
 
         GameResponse response = new GameResponse(
                 "STATE", fen, board.getSideToMove().toString(),
-                isMated, board.isDraw() || (isArchived && "DRAW".equals(archiveResult)), times[0], times[1]
+                isMated, board.isDraw() || "DRAW".equals(finalResult), wTime, bTime
         );
         response.setLastMove(board.getHistory().isEmpty() ? null : board.getHistory().get(board.getHistory().size() - 1).toString().toLowerCase());
 
-        if (isArchived) {
-            response.setEndReason("MATE");
-            if ("WHITE_WON".equals(archiveResult)) response.setLastMove("WHITE_WON");
-            else if ("BLACK_WON".equals(archiveResult)) response.setLastMove("BLACK_WON");
-            else response.setLastMove("DRAW");
+        if (finished) {
+            if (finalReason == null) finalReason = "DRAW".equals(finalResult) ? "DRAW" : "MATE";
+            response.setEndReason(finalReason);
+            response.setResult(finalResult);
         }
 
         response.setMoves(gameService.getGameMoves(gameId));
@@ -213,7 +275,7 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
         int blackRating = 1500;
         String gameCategory = gameService.getGameCategory(gameId);
 
-        if (white != null && !white.startsWith("Guest")) {
+        if (white != null && !white.startsWith("anon-")) {
             try {
                 String url = userServiceUrl + "/api/v1/users/" + white;
                 Map<?, ?> uMap = restTemplate.getForObject(url, Map.class);
@@ -222,7 +284,7 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
                 System.out.println("Не удалось получить рейтинг белых: " + e.getMessage());
             }
         }
-        if (black != null && !black.startsWith("Guest")) {
+        if (black != null && !black.startsWith("anon-")) {
             try {
                 String url = userServiceUrl + "/api/v1/users/" + black;
                 Map<?, ?> uMap = restTemplate.getForObject(url, Map.class);
@@ -232,15 +294,18 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
             }
         }
 
+        String whiteNameFormatted = (white == null) ? "Ожидание..." : (white.startsWith("anon-") ? "Anonymous" : white);
+        String blackNameFormatted = (black == null) ? "Ожидание..." : (black.startsWith("anon-") ? "Anonymous" : black);
+
         String jsonResponse = objectMapper.writeValueAsString(response);
         Map<String, Object> baseMap = objectMapper.readValue(jsonResponse, Map.class);
-        baseMap.put("whitePlayer", white != null ? white : "Ожидание соперника...");
-        baseMap.put("blackPlayer", black != null ? black : "Ожидание соперника...");
+        baseMap.put("whitePlayer", whiteNameFormatted);
+        baseMap.put("blackPlayer", blackNameFormatted);
         baseMap.put("whiteRating", whiteRating);
         baseMap.put("blackRating", blackRating);
 
         Map<String, Object> selfMap = new HashMap<>(baseMap);
-        selfMap.put("role", isArchived ? "SPECTATOR" : role);
+        selfMap.put("role", isArchived ? "SPECTATOR" : userRole);
         session.sendMessage(new TextMessage(objectMapper.writeValueAsString(selfMap)));
 
         Set<WebSocketSession> sessions = roomSessions.get(gameId);
@@ -254,11 +319,14 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
         }
     }
 
+
     private void handleMove(WebSocketSession session, GameMessage payload) throws IOException {
         String gameId = payload.getGameId();
-        String username = payload.getUsername();
-        if (username == null || username.isBlank()) {
-            username = (String) session.getAttributes().get("username");
+        String userId = (String) session.getAttributes().get("userId");
+
+        if (gameService.isGameFinished(gameId)) {
+            sendError(session, "Партия уже завершена.");
+            return;
         }
 
         String white = gameService.getPlayerColor(gameId, "white");
@@ -267,8 +335,8 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
         Board boardBefore = gameService.getBoardState(gameId);
         String currentTurn = boardBefore.getSideToMove().toString();
 
-        boolean isWhiteTurn = currentTurn.equals("WHITE") && username.equals(white);
-        boolean isBlackTurn = currentTurn.equals("BLACK") && username.equals(black);
+        boolean isWhiteTurn = currentTurn.equals("WHITE") && userId.equals(white);
+        boolean isBlackTurn = currentTurn.equals("BLACK") && userId.equals(black);
 
         if (!isWhiteTurn && !isBlackTurn) {
             sendError(session, "Сейчас не ваш ход или вы зритель!");
@@ -310,6 +378,10 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
 
             if (boardAfter.isMated() || boardAfter.isDraw() || isTimeout) {
                 String result = isTimeout ? (whiteTime <= 0 ? "BLACK_WON" : "WHITE_WON") : (boardAfter.getSideToMove().toString().equals("BLACK") ? "WHITE_WON" : "BLACK_WON");
+                if (boardAfter.isDraw()) result = "DRAW";
+
+                response.setResult(result);
+                gameService.setGameResult(gameId, result, endReason, whiteTime, blackTime);
 
                 Map<?, ?> ratingResult = sendGameResultToUserService(gameId, boardAfter, result);
                 if (ratingResult != null) {
@@ -327,28 +399,25 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
         }
     }
 
-    private void handleDrawOffer(WebSocketSession session, GameMessage payload) throws IOException {
-        Map<String, String> drawOffer = Map.of(
-                "type", "DRAW_OFFER_RECEIVED",
-                "sender", payload.getUsername()
-        );
-        broadcastToRoom(payload.getGameId(), new GameResponse("DRAW_OFFER", payload.getUsername(), "Предложена ничья"));
 
-        Set<WebSocketSession> sessions = roomSessions.get(payload.getGameId());
-        if (sessions != null) {
-            String json = objectMapper.writeValueAsString(drawOffer);
-            for (WebSocketSession s : sessions) {
-                if (s.isOpen()) s.sendMessage(new TextMessage(json));
-            }
-        }
+    private void handleDrawOffer(WebSocketSession session, GameMessage payload) throws IOException {
+        String sender = (String) session.getAttributes().get("username");
+        broadcastToRoom(payload.getGameId(), new GameResponse("DRAW_OFFER_RECEIVED", sender, "Предложена ничья"));
     }
 
     private void handleDrawAccept(WebSocketSession session, GameMessage payload) throws IOException {
         String gameId = payload.getGameId();
-        Board board = gameService.getBoardState(gameId);
 
-        GameResponse response = new GameResponse("STATE", board.getFen(), "WHITE", false, true, 0, 0);
+        if (gameService.isGameFinished(gameId)) return;
+
+        Board board = gameService.getBoardState(gameId);
+        long[] times = gameService.getGameTimes(gameId);
+
+        gameService.setGameResult(gameId, "DRAW", "DRAW", times[0], times[1]);
+
+        GameResponse response = new GameResponse("STATE", board.getFen(), "WHITE", false, true, times[0], times[1]);
         response.setEndReason("DRAW");
+        response.setResult("DRAW");
         response.setLastMove("DRAW");
         response.setMoves(gameService.getGameMoves(gameId));
         response.setCategory(gameService.getGameCategory(gameId));
@@ -380,23 +449,33 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
 
     private void handleSurrender(WebSocketSession session, GameMessage payload) throws IOException {
         String gameId = payload.getGameId();
-        String username = payload.getUsername();
-        if (username == null) username = (String) session.getAttributes().get("username");
+        String userId = (String) session.getAttributes().get("userId");
 
         String white = gameService.getPlayerColor(gameId, "white");
         String black = gameService.getPlayerColor(gameId, "black");
 
         if (white == null || black == null) return;
 
-        String result = username.equals(white) ? "BLACK_WON" : "WHITE_WON";
+        if (userId == null || (!userId.equals(white) && !userId.equals(black))) {
+            sendError(session, "Только участник партии может сдаться.");
+            return;
+        }
+
+        if (gameService.isGameFinished(gameId)) return;
+
+        String result = userId.equals(white) ? "BLACK_WON" : "WHITE_WON";
+        String winnerColor = "WHITE_WON".equals(result) ? "WHITE" : "BLACK";
 
         Board board = gameService.getBoardState(gameId);
+        long[] times = gameService.getGameTimes(gameId);
 
+        gameService.setGameResult(gameId, result, "SURRENDER", times[0], times[1]);
         Map<?, ?> ratingResult = sendGameResultToUserService(gameId, board, result);
 
-        GameResponse response = new GameResponse("STATE", board.getFen(), "WHITE", true, false, 0, 0);
-        response.setLastMove("TIMEOUT");
+        GameResponse response = new GameResponse("STATE", board.getFen(), winnerColor, true, false, times[0], times[1]);
         response.setEndReason("SURRENDER");
+        response.setResult(result);
+        response.setLastMove(board.getHistory().isEmpty() ? null : board.getHistory().get(board.getHistory().size() - 1).toString().toLowerCase());
         response.setMoves(gameService.getGameMoves(gameId));
         response.setCategory(gameService.getGameCategory(gameId));
 
@@ -410,8 +489,9 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
         broadcastToRoom(gameId, response);
     }
 
-    private void handleChat(GameMessage payload) throws IOException {
-        GameResponse response = new GameResponse("CHAT", payload.getUsername(), payload.getMessage());
+    private void handleChat(WebSocketSession session, GameMessage payload) throws IOException {
+        String username = (String) session.getAttributes().get("username");
+        GameResponse response = new GameResponse("CHAT", username, payload.getMessage());
         broadcastToRoom(payload.getGameId(), response);
     }
 
@@ -448,6 +528,10 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
                 }
             }
         }
+
+        for (Queue<WebSocketSession> queue : matchmakingQueues.values()) {
+            queue.remove(session);
+        }
     }
 
     private Map<?, ?> sendGameResultToUserService(String gameId, Board board, String result) {
@@ -460,15 +544,14 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
 
             Map<String, Object> request = new HashMap<>();
             request.put("gameId", gameId);
-            request.put("whitePlayer", white);
-            request.put("blackPlayer", black);
+            request.put("whitePlayer", white.startsWith("anon-") ? "Anonymous" : white);
+            request.put("blackPlayer", black.startsWith("anon-") ? "Anonymous" : black);
             request.put("result", result);
             request.put("category", category);
             request.put("pgn", board.getHistory().toString());
 
             String targetUrl = this.userServiceUrl + "/api/v1/internal/games/complete";
             var responseEntity = restTemplate.postForEntity(targetUrl, request, Map.class);
-            System.out.println(">>> Игра " + gameId + " завершена со статусом " + result + ". Результаты отправлены!");
             return responseEntity.getBody();
         } catch (Exception e) {
             System.err.println("Ошибка отправки результатов игры: " + e.getMessage());
@@ -492,6 +575,8 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
     private void handleTimeout(WebSocketSession session, GameMessage payload) throws IOException {
         String gameId = payload.getGameId();
 
+        if (gameService.isGameFinished(gameId)) return;
+
         long[] times = gameService.getGameTimes(gameId);
         long whiteTime = times[0];
         long blackTime = times[1];
@@ -504,11 +589,13 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
             Board board = gameService.getBoardState(gameId);
             int movesCount = gameService.getGameMoves(gameId).size();
 
-            // Если время вышло до совершения первых ходов (меньше 2 ходов в сумме)
             if (movesCount < 2) {
+                gameService.setGameResult(gameId, "ABORTED", "ABORTED", 0, 0);
+
                 GameResponse response = new GameResponse("STATE", board.getFen(), "WHITE", true, false, 0, 0);
                 response.setLastMove("ABORTED");
                 response.setEndReason("ABORTED");
+                response.setResult("ABORTED");
                 response.setMoves(gameService.getGameMoves(gameId));
                 response.setCategory(gameService.getGameCategory(gameId));
 
@@ -517,9 +604,12 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
             } else {
                 String result = (whiteTime <= 0) ? "BLACK_WON" : "WHITE_WON";
 
+                gameService.setGameResult(gameId, result, "TIMEOUT", whiteTime, blackTime);
+
                 GameResponse response = new GameResponse("STATE", board.getFen(), "WHITE", true, false, whiteTime, blackTime);
                 response.setLastMove("TIMEOUT");
                 response.setEndReason("TIMEOUT");
+                response.setResult(result);
                 response.setMoves(gameService.getGameMoves(gameId));
                 response.setCategory(gameService.getGameCategory(gameId));
 

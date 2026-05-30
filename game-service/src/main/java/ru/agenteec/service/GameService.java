@@ -186,6 +186,32 @@ public class GameService {
         return cat != null ? cat.toUpperCase() : "RAPID";
     }
 
+
+    public void setGameResult(String gameId, String result, String endReason, long whiteTime, long blackTime) {
+        String val = String.join("|",
+                result == null ? "" : result,
+                endReason == null ? "" : endReason,
+                String.valueOf(whiteTime),
+                String.valueOf(blackTime));
+        redisTemplate.opsForValue().set("chess:game:" + gameId + ":result", val, 1, TimeUnit.DAYS);
+    }
+
+    public boolean isGameFinished(String gameId) {
+        return Boolean.TRUE.equals(redisTemplate.hasKey("chess:game:" + gameId + ":result"));
+    }
+
+    public String[] getGameResult(String gameId) {
+        String v = redisTemplate.opsForValue().get("chess:game:" + gameId + ":result");
+        if (v == null) return null;
+        String[] p = v.split("\\|", -1);
+        return new String[]{
+                p.length > 0 && !p[0].isEmpty() ? p[0] : null,
+                p.length > 1 && !p[1].isEmpty() ? p[1] : null,
+                p.length > 2 && !p[2].isEmpty() ? p[2] : null,
+                p.length > 3 && !p[3].isEmpty() ? p[3] : null
+        };
+    }
+
     public long[] updateTimeOnMove(String gameId, String activeColor) {
         String whiteTimeKey = "chess:game:" + gameId + ":time:white";
         String blackTimeKey = "chess:game:" + gameId + ":time:black";
