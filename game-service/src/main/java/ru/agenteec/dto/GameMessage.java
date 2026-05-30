@@ -10,6 +10,7 @@ public class GameMessage {
     private Integer minutes;
     private Integer increment;
     private String category;
+    private String token;
 
     public String getAction() { return action; }
     public void setAction(String action) { this.action = action; }
@@ -29,4 +30,6 @@ public class GameMessage {
     public void setIncrement(Integer increment) { this.increment = increment; }
     public String getCategory() { return category; }
     public void setCategory(String category) { this.category = category; }
+    public String getToken() { return token; }
+    public void setToken(String token) { this.token = token; }
 }

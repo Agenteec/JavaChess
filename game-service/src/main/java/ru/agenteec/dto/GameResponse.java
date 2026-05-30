@@ -12,6 +12,7 @@ public class GameResponse {
     private String message;
     private String sender;
     private String endReason;
+    private String result;
     private List<String> moves;
     private String category;
     private Integer whiteRatingChange;
@@ -62,6 +63,9 @@ public class GameResponse {
     public long getBlackTimeLeft() { return blackTimeLeft; }
     public String getEndReason() { return endReason; }
     public void setEndReason(String endReason) { this.endReason = endReason; }
+    public String getResult() { return result; }
+    public void setResult(String result) { this.result = result; }
+    public void setTurn(String turn) { this.turn = turn; }
     public String getCategory() { return category; }
     public void setCategory(String category) { this.category = category; }
     public Integer getWhiteRatingChange() { return whiteRatingChange; }
