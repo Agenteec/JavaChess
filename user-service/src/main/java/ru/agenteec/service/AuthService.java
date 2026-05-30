@@ -25,6 +25,14 @@ public class AuthService {
         this.jwtService = jwtService;
         this.mailService = mailService;
     }
+
+    public AuthResponse generateGuestToken() {
+        String guestId = "anon-" + UUID.randomUUID().toString();
+        String guestName = "Anonymous";
+        String token = jwtService.generateToken(guestId, guestName, "ROLE_GUEST");
+        return new AuthResponse(token, guestName, 1500);
+    }
+
     public AuthResponse register(RegisterRequest request) {
         if (userRepository.findByUsername(request.getUsername()).isPresent()) {
             throw new RuntimeException("Username already taken!");
@@ -96,9 +104,10 @@ public class AuthService {
             throw new RuntimeException("Пожалуйста, подтвердите вашу электронную почту перед входом!");
         }
 
-        String token = jwtService.generateToken(user.getUsername());
+        String token = jwtService.generateToken(user.getUsername(), user.getUsername(), "ROLE_USER");
         return new AuthResponse(token, user.getUsername(), user.getRatingRapid());
     }
+
     public void resendVerification(String email) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("Пользователь с такой почтой не найден!"));

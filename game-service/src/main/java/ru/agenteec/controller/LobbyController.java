@@ -35,7 +35,7 @@ public class LobbyController {
 
                 Map<String, Object> challenge = new HashMap<>();
                 challenge.put("roomId", gameId);
-                challenge.put("player", creator);
+                challenge.put("player", creator.startsWith("anon-") ? "Anonymous" : creator);
                 challenge.put("type", category);
 
                 int rating = 1500;
