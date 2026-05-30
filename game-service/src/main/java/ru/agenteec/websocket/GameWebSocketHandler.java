@@ -2,7 +2,7 @@ package ru.agenteec.websocket;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.bhlangonijr.chesslib.Board;
-import com.github.bhlangonijr.chesslib.MoveBackup;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.*;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
@@ -19,6 +19,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 public class GameWebSocketHandler extends TextWebSocketHandler {
 
     private final GameService gameService;
+    private final String userServiceUrl;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private final Map<String, Set<WebSocketSession>> roomSessions = new ConcurrentHashMap<>();
@@ -27,8 +28,9 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
 
     private final org.springframework.web.client.RestTemplate restTemplate = new org.springframework.web.client.RestTemplate();
 
-    public GameWebSocketHandler(GameService gameService) {
+    public GameWebSocketHandler(GameService gameService, @Value("${app.user-service.internal-url}") String userServiceUrl) {
         this.gameService = gameService;
+        this.userServiceUrl = userServiceUrl;
     }
 
     @Override
@@ -44,7 +46,7 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
                     break;
                 case "JOIN":
                     session.getAttributes().put("username", payload.getUsername());
-                    handleJoin(session, payload.getGameId(), payload.getUsername());
+                    handleJoin(session, payload);
                     break;
                 case "MOVE":
                     handleMove(session, payload);
@@ -121,7 +123,10 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
         }
     }
 
-    private void handleJoin(WebSocketSession session, String gameId, String username) throws IOException {
+    private void handleJoin(WebSocketSession session, GameMessage payload) throws IOException {
+        String gameId = payload.getGameId();
+        String username = payload.getUsername();
+
         roomSessions.computeIfAbsent(gameId, k -> Collections.synchronizedSet(new HashSet<>())).add(session);
         sessionRooms.put(session.getId(), gameId);
 
@@ -136,7 +141,7 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
 
         if (white == null && black == null) {
             try {
-                String url = "http://localhost:8081/api/v1/internal/games/" + gameId;
+                String url = userServiceUrl + "/api/v1/internal/games/" + gameId;
                 Map<?, ?> history = restTemplate.getForObject(url, Map.class);
                 if (history != null) {
                     white = (String) history.get("whitePlayer");
@@ -151,10 +156,10 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
 
         if (white == null && !isArchived) {
             gameService.assignPlayerColor(gameId, username);
-            gameService.initGameTime(gameId);
 
-            Object minsAttr = session.getAttributes().get("minutes");
-            int mins = minsAttr instanceof Integer ? (Integer) minsAttr : 10;
+            int mins = payload.getMinutes() != null ? payload.getMinutes() : 10;
+            int inc = payload.getIncrement() != null ? payload.getIncrement() : 0;
+            gameService.initGameTime(gameId, mins, inc);
 
             String category = "RAPID";
             if (mins < 3) category = "BULLET";
@@ -166,6 +171,15 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
         } else if (black == null && !username.equals(white) && !isArchived) {
             gameService.assignPlayerColor(gameId, username);
             black = username;
+
+            String lastMoveKey = "chess:game:" + gameId + ":last_move_time";
+            gameService.updateTimeOnMove(gameId, "WHITE");
+        }
+
+        if (gameService.getPlayerColor(gameId, "black") == null && !isArchived) {
+            gameService.addOpenChallenge(gameId);
+        } else {
+            gameService.removeOpenChallenge(gameId);
         }
 
         String role = "SPECTATOR";
@@ -174,6 +188,7 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
 
         String fen = gameService.getOrCreateGame(gameId);
         Board board = gameService.getBoardState(gameId);
+
         long[] times = gameService.getGameTimes(gameId);
 
         boolean isMated = board.isMated() || isArchived;
@@ -200,7 +215,7 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
 
         if (white != null && !white.startsWith("Guest")) {
             try {
-                String url = "http://localhost:8081/api/v1/users/" + white;
+                String url = userServiceUrl + "/api/v1/users/" + white;
                 Map<?, ?> uMap = restTemplate.getForObject(url, Map.class);
                 whiteRating = getCategoryRating(uMap, gameCategory);
             } catch (Exception e) {
@@ -209,7 +224,7 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
         }
         if (black != null && !black.startsWith("Guest")) {
             try {
-                String url = "http://localhost:8081/api/v1/users/" + black;
+                String url = userServiceUrl + "/api/v1/users/" + black;
                 Map<?, ?> uMap = restTemplate.getForObject(url, Map.class);
                 blackRating = getCategoryRating(uMap, gameCategory);
             } catch (Exception e) {
@@ -217,18 +232,26 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
             }
         }
 
-        Map<String, Object> meta = new HashMap<>();
-        meta.put("role", isArchived ? "SPECTATOR" : role);
-        meta.put("whitePlayer", white != null ? white : "Ожидание соперника...");
-        meta.put("blackPlayer", black != null ? black : "Ожидание соперника...");
-        meta.put("whiteRating", whiteRating);
-        meta.put("blackRating", blackRating);
-
         String jsonResponse = objectMapper.writeValueAsString(response);
-        Map<String, Object> finalMap = objectMapper.readValue(jsonResponse, Map.class);
-        finalMap.putAll(meta);
+        Map<String, Object> baseMap = objectMapper.readValue(jsonResponse, Map.class);
+        baseMap.put("whitePlayer", white != null ? white : "Ожидание соперника...");
+        baseMap.put("blackPlayer", black != null ? black : "Ожидание соперника...");
+        baseMap.put("whiteRating", whiteRating);
+        baseMap.put("blackRating", blackRating);
 
-        session.sendMessage(new TextMessage(objectMapper.writeValueAsString(finalMap)));
+        Map<String, Object> selfMap = new HashMap<>(baseMap);
+        selfMap.put("role", isArchived ? "SPECTATOR" : role);
+        session.sendMessage(new TextMessage(objectMapper.writeValueAsString(selfMap)));
+
+        Set<WebSocketSession> sessions = roomSessions.get(gameId);
+        if (sessions != null) {
+            String othersJson = objectMapper.writeValueAsString(baseMap);
+            for (WebSocketSession s : sessions) {
+                if (s != session && s.isOpen()) {
+                    s.sendMessage(new TextMessage(othersJson));
+                }
+            }
+        }
     }
 
     private void handleMove(WebSocketSession session, GameMessage payload) throws IOException {
@@ -256,7 +279,8 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
             List<String> movesList = gameService.makeMove(gameId, payload.getFrom(), payload.getTo());
             Board boardAfter = gameService.getBoardState(gameId);
 
-            long[] times = gameService.updateTimeOnMove(gameId, currentTurn);
+            gameService.updateTimeOnMove(gameId, currentTurn);
+            long[] times = gameService.getGameTimes(gameId);
             long whiteTime = times[0];
             long blackTime = times[1];
 
@@ -364,7 +388,6 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
 
         if (white == null || black == null) return;
 
-        String winner = username.equals(white) ? black : white;
         String result = username.equals(white) ? "BLACK_WON" : "WHITE_WON";
 
         Board board = gameService.getBoardState(gameId);
@@ -443,8 +466,8 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
             request.put("category", category);
             request.put("pgn", board.getHistory().toString());
 
-            String userServiceUrl = "http://localhost:8081/api/v1/internal/games/complete";
-            var responseEntity = restTemplate.postForEntity(userServiceUrl, request, Map.class);
+            String targetUrl = this.userServiceUrl + "/api/v1/internal/games/complete";
+            var responseEntity = restTemplate.postForEntity(targetUrl, request, Map.class);
             System.out.println(">>> Игра " + gameId + " завершена со статусом " + result + ". Результаты отправлены!");
             return responseEntity.getBody();
         } catch (Exception e) {
@@ -465,10 +488,11 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
         Object val = userMap.get(key);
         return val instanceof Number ? ((Number) val).intValue() : 1500;
     }
+
     private void handleTimeout(WebSocketSession session, GameMessage payload) throws IOException {
         String gameId = payload.getGameId();
 
-        long[] times = gameService.updateTimeOnMove(gameId, "WHITE");
+        long[] times = gameService.getGameTimes(gameId);
         long whiteTime = times[0];
         long blackTime = times[1];
 
@@ -477,16 +501,36 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
             String black = gameService.getPlayerColor(gameId, "black");
             if (white == null || black == null) return;
 
-            String result = (whiteTime <= 0) ? "BLACK_WON" : "WHITE_WON";
             Board board = gameService.getBoardState(gameId);
+            int movesCount = board.getHistory().size();
 
-            GameResponse response = new GameResponse("STATE", board.getFen(), "WHITE", true, false, whiteTime, blackTime);
-            response.setLastMove("TIMEOUT");
-            response.setEndReason("TIMEOUT");
-            response.setMoves(gameService.getGameMoves(gameId));
-            broadcastToRoom(gameId, response);
+            if (movesCount < 2) {
+                GameResponse response = new GameResponse("STATE", board.getFen(), "WHITE", true, false, 0, 0);
+                response.setLastMove("ABORTED");
+                response.setEndReason("ABORTED");
+                response.setMoves(gameService.getGameMoves(gameId));
+                response.setCategory(gameService.getGameCategory(gameId));
 
-            sendGameResultToUserService(gameId, board, result);
+                sendGameResultToUserService(gameId, board, "ABORTED");
+                broadcastToRoom(gameId, response);
+            } else {
+                String result = (whiteTime <= 0) ? "BLACK_WON" : "WHITE_WON";
+
+                GameResponse response = new GameResponse("STATE", board.getFen(), "WHITE", true, false, whiteTime, blackTime);
+                response.setLastMove("TIMEOUT");
+                response.setEndReason("TIMEOUT");
+                response.setMoves(gameService.getGameMoves(gameId));
+                response.setCategory(gameService.getGameCategory(gameId));
+
+                Map<?, ?> ratingResult = sendGameResultToUserService(gameId, board, result);
+                if (ratingResult != null) {
+                    response.setWhiteRatingChange((Integer) ratingResult.get("whiteRatingChange"));
+                    response.setBlackRatingChange((Integer) ratingResult.get("blackRatingChange"));
+                    response.setWhiteNewRating((Integer) ratingResult.get("whiteNewRating"));
+                    response.setBlackNewRating((Integer) ratingResult.get("blackNewRating"));
+                }
+                broadcastToRoom(gameId, response);
+            }
         }
     }
 }

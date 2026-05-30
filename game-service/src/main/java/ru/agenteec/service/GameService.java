@@ -1,16 +1,11 @@
 package ru.agenteec.service;
 
 import com.github.bhlangonijr.chesslib.Board;
-import com.github.bhlangonijr.chesslib.Square;
-import com.github.bhlangonijr.chesslib.move.Move;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 @Service
@@ -70,6 +65,7 @@ public class GameService {
         }
         return board;
     }
+
     public void assignPlayerColor(String gameId, String username) {
         String whiteKey = "chess:game:" + gameId + ":white";
         String blackKey = "chess:game:" + gameId + ":black";
@@ -85,6 +81,7 @@ public class GameService {
     public String getPlayerColor(String gameId, String color) {
         return redisTemplate.opsForValue().get("chess:game:" + gameId + ":" + color.toLowerCase());
     }
+
     public void initGameTime(String gameId, int minutes, int increment) {
         String whiteTimeKey = "chess:game:" + gameId + ":time:white";
         String blackTimeKey = "chess:game:" + gameId + ":time:black";
@@ -102,6 +99,7 @@ public class GameService {
     public void initGameTime(String gameId) {
         initGameTime(gameId, 10, 0);
     }
+
     public long[] getGameTimes(String gameId) {
         String whiteTimeKey = "chess:game:" + gameId + ":time:white";
         String blackTimeKey = "chess:game:" + gameId + ":time:black";
@@ -113,14 +111,26 @@ public class GameService {
         long whiteTime = wStr != null ? Long.parseLong(wStr) : 600;
         long blackTime = bStr != null ? Long.parseLong(bStr) : 600;
 
-        Board board = getBoardState(gameId);
-        if (!board.getHistory().isEmpty()) {
-            String activeColor = board.getSideToMove().toString();
-            long now = System.currentTimeMillis();
-            String lastMoveStr = redisTemplate.opsForValue().get(lastMoveKey);
-            long lastMoveTime = lastMoveStr != null ? Long.parseLong(lastMoveStr) : now;
-            long elapsedSeconds = (now - lastMoveTime) / 1000;
+        String black = getPlayerColor(gameId, "black");
 
+        if (black == null) {
+            return new long[]{whiteTime, blackTime};
+        }
+
+        Board board = getBoardState(gameId);
+        int movesCount = board.getHistory().size();
+
+        long now = System.currentTimeMillis();
+        String lastMoveStr = redisTemplate.opsForValue().get(lastMoveKey);
+        long lastMoveTime = lastMoveStr != null ? Long.parseLong(lastMoveStr) : now;
+        long elapsedSeconds = (now - lastMoveTime) / 1000;
+
+        if (movesCount == 0) {
+            whiteTime = Math.max(0, 15 - elapsedSeconds);
+        } else if (movesCount == 1) {
+            blackTime = Math.max(0, 15 - elapsedSeconds);
+        } else {
+            String activeColor = board.getSideToMove().toString();
             if (activeColor.equalsIgnoreCase("WHITE")) {
                 whiteTime = Math.max(0, whiteTime - elapsedSeconds);
             } else {
@@ -130,6 +140,7 @@ public class GameService {
 
         return new long[]{whiteTime, blackTime};
     }
+
     public List<String> getGameMoves(String gameId) {
         String key = "chess:game:" + gameId + ":moves";
         List<String> moves = redisTemplate.opsForList().range(key, 0, -1);
@@ -152,39 +163,60 @@ public class GameService {
         }
         return moves != null ? moves : new ArrayList<>();
     }
+
     public void setGameCategory(String gameId, String category) {
         redisTemplate.opsForValue().set("chess:game:" + gameId + ":category", category.toUpperCase(), 1, TimeUnit.DAYS);
+    }
+
+    public void addOpenChallenge(String gameId) {
+        redisTemplate.opsForSet().add("chess:lobby:challenges", gameId);
+    }
+
+    public void removeOpenChallenge(String gameId) {
+        redisTemplate.opsForSet().remove("chess:lobby:challenges", gameId);
+    }
+
+    public Set<String> getOpenChallenges() {
+        return redisTemplate.opsForSet().members("chess:lobby:challenges");
     }
 
     public String getGameCategory(String gameId) {
         String cat = redisTemplate.opsForValue().get("chess:game:" + gameId + ":category");
         return cat != null ? cat.toUpperCase() : "RAPID";
     }
+
     public long[] updateTimeOnMove(String gameId, String activeColor) {
         String whiteTimeKey = "chess:game:" + gameId + ":time:white";
         String blackTimeKey = "chess:game:" + gameId + ":time:black";
         String lastMoveKey = "chess:game:" + gameId + ":last_move_time";
 
         long now = System.currentTimeMillis();
-        String lastMoveStr = redisTemplate.opsForValue().get(lastMoveKey);
-        long lastMoveTime = lastMoveStr != null ? Long.parseLong(lastMoveStr) : now;
+        Board board = getBoardState(gameId);
+        int movesCount = board.getHistory().size();
 
-        long elapsedSeconds = (now - lastMoveTime) / 1000;
+        if (movesCount <= 2) {
+            redisTemplate.opsForValue().set(lastMoveKey, String.valueOf(now), 1, TimeUnit.DAYS);
+        } else {
+            String lastMoveStr = redisTemplate.opsForValue().get(lastMoveKey);
+            long lastMoveTime = lastMoveStr != null ? Long.parseLong(lastMoveStr) : now;
 
-        String activeKey = activeColor.equalsIgnoreCase("WHITE") ? whiteTimeKey : blackTimeKey;
-        String currentTimeStr = redisTemplate.opsForValue().get(activeKey);
-        long timeLeft = currentTimeStr != null ? Long.parseLong(currentTimeStr) : 600;
+            long elapsedSeconds = (now - lastMoveTime) / 1000;
 
-        timeLeft = Math.max(0, timeLeft - elapsedSeconds);
+            String activeKey = activeColor.equalsIgnoreCase("WHITE") ? whiteTimeKey : blackTimeKey;
+            String currentTimeStr = redisTemplate.opsForValue().get(activeKey);
+            long timeLeft = currentTimeStr != null ? Long.parseLong(currentTimeStr) : 600;
 
-        if (timeLeft > 0) {
-            String incStr = redisTemplate.opsForValue().get("chess:game:" + gameId + ":increment");
-            int increment = incStr != null ? Integer.parseInt(incStr) : 0;
-            timeLeft += increment;
+            timeLeft = Math.max(0, timeLeft - elapsedSeconds);
+
+            if (timeLeft > 0) {
+                String incStr = redisTemplate.opsForValue().get("chess:game:" + gameId + ":increment");
+                int increment = incStr != null ? Integer.parseInt(incStr) : 0;
+                timeLeft += increment;
+            }
+
+            redisTemplate.opsForValue().set(activeKey, String.valueOf(timeLeft), 1, TimeUnit.DAYS);
+            redisTemplate.opsForValue().set(lastMoveKey, String.valueOf(now), 1, TimeUnit.DAYS);
         }
-
-        redisTemplate.opsForValue().set(activeKey, String.valueOf(timeLeft), 1, TimeUnit.DAYS);
-        redisTemplate.opsForValue().set(lastMoveKey, String.valueOf(now), 1, TimeUnit.DAYS);
 
         long whiteTime = Long.parseLong(redisTemplate.opsForValue().get(whiteTimeKey));
         long blackTime = Long.parseLong(redisTemplate.opsForValue().get(blackTimeKey));
