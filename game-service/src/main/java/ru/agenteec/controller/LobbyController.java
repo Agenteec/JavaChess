@@ -14,11 +14,14 @@ public class LobbyController {
 
     private final GameService gameService;
     private final String userServiceUrl;
-    private final org.springframework.web.client.RestTemplate restTemplate = new org.springframework.web.client.RestTemplate();
+    private final org.springframework.web.client.RestTemplate restTemplate;
 
-    public LobbyController(GameService gameService, @Value("${app.user-service.internal-url}") String userServiceUrl) {
+    public LobbyController(GameService gameService,
+                          @Value("${app.user-service.internal-url}") String userServiceUrl,
+                          org.springframework.web.client.RestTemplate restTemplate) {
         this.gameService = gameService;
         this.userServiceUrl = userServiceUrl;
+        this.restTemplate = restTemplate;
     }
 
     @GetMapping("/challenges")

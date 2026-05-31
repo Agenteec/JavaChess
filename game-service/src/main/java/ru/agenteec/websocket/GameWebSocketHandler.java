@@ -27,14 +27,16 @@ public class GameWebSocketHandler extends TextWebSocketHandler {
     private final Map<String, String> sessionRooms = new ConcurrentHashMap<>();
     private final Map<String, Queue<WebSocketSession>> matchmakingQueues = new ConcurrentHashMap<>();
 
-    private final org.springframework.web.client.RestTemplate restTemplate = new org.springframework.web.client.RestTemplate();
+    private final org.springframework.web.client.RestTemplate restTemplate;
 
     public GameWebSocketHandler(GameService gameService,
                                 @Value("${app.user-service.internal-url}") String userServiceUrl,
-                                JwtService jwtService) {
+                                JwtService jwtService,
+                                org.springframework.web.client.RestTemplate restTemplate) {
         this.gameService = gameService;
         this.userServiceUrl = userServiceUrl;
         this.jwtService = jwtService;
+        this.restTemplate = restTemplate;
     }
 
     @Override

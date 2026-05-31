@@ -39,6 +39,7 @@ services:
       - SPRING_DATASOURCE_PASSWORD=${POSTGRES_PASSWORD}
       - JWT_SECRET=${JWT_SECRET}
       - TURNSTILE_SECRET=${TURNSTILE_SECRET}
+      - INTERNAL_SECRET=${INTERNAL_SECRET}
       - SPRING_MAIL_HOST=mailserver
       - SPRING_MAIL_PORT=25
       - SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH=false
@@ -58,6 +59,7 @@ services:
       - SPRING_DATA_REDIS_PORT=6379
       - USER_SERVICE_INTERNAL_URL=http://user-service:8081
       - JWT_SECRET=${JWT_SECRET}
+      - INTERNAL_SECRET=${INTERNAL_SECRET}
     networks:
       - chess-network
 

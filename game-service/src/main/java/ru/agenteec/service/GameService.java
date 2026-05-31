@@ -13,11 +13,14 @@ public class GameService {
     private final String userServiceUrl;
     private final StringRedisTemplate redisTemplate;
     private static final String START_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-    private final org.springframework.web.client.RestTemplate restTemplate = new org.springframework.web.client.RestTemplate();
+    private final org.springframework.web.client.RestTemplate restTemplate;
 
-    public GameService(StringRedisTemplate redisTemplate, @Value("${app.user-service.internal-url}") String userServiceUrl) {
+    public GameService(StringRedisTemplate redisTemplate,
+                       @Value("${app.user-service.internal-url}") String userServiceUrl,
+                       org.springframework.web.client.RestTemplate restTemplate) {
         this.redisTemplate = redisTemplate;
         this.userServiceUrl = userServiceUrl;
+        this.restTemplate = restTemplate;
     }
 
     public String getOrCreateGame(String gameId) {

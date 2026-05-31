@@ -243,7 +243,7 @@ export default function ChessGame({ roomId, username, onExit, initialMins, initi
     const inviteFriend = async () => {
         const data = { title: 'Agenteec Chess', text: 'Сыграем партию?', url: shareLink };
         if (navigator.share) {
-            try { await navigator.share(data); return; } catch (e) { /* отменили — копируем */ }
+            try { await navigator.share(data); return; } catch (e) { }
         }
         copyShareLink();
     };

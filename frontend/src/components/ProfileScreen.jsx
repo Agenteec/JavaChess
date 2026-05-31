@@ -124,7 +124,6 @@ export default function ProfileScreen({ targetUser, userBaseUrl, onBack, onViewG
             }
         });
 
-        // Текущая серия — по последним партиям (с конца хронологии)
         for (let i = sortedGames.length - 1; i >= 0; i--) {
             const g = sortedGames[i];
             const isWhite = g.whitePlayer === targetUser;
@@ -222,7 +221,6 @@ export default function ProfileScreen({ targetUser, userBaseUrl, onBack, onViewG
                 </div>
             </div>
 
-            {/* Карточки рейтингов по категориям */}
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 md:gap-4">
                 {[
                     { label: 'Bullet', rating: user.ratingBullet, games: user.gamesBullet },
@@ -239,7 +237,6 @@ export default function ProfileScreen({ targetUser, userBaseUrl, onBack, onViewG
                 ))}
             </div>
 
-            {/* Расширенная статистика */}
             <div className="bg-[#201D17] border border-[#322C24] rounded-lg p-4 md:p-5 flex flex-col gap-4">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-[#322C24] pb-2">
                     <h3 className="text-base md:text-lg font-bold text-white">Статистика</h3>
@@ -277,7 +274,6 @@ export default function ProfileScreen({ targetUser, userBaseUrl, onBack, onViewG
                 </div>
             </div>
 
-            {/* График изменения рейтинга */}
             <div className="bg-[#201D17] border border-[#322C24] rounded-lg p-4 md:p-5 flex flex-col gap-3">
                 <h3 className="text-base md:text-lg font-bold text-white border-b border-[#322C24] pb-2">Изменение рейтинга</h3>
                 {stats.ratingPoints.length === 0 ? (
@@ -289,7 +285,6 @@ export default function ProfileScreen({ targetUser, userBaseUrl, onBack, onViewG
                 )}
             </div>
 
-            {/* История партий */}
             <div className="bg-[#201D17] border border-[#322C24] rounded-lg p-4 md:p-5 flex flex-col gap-3">
                 <h3 className="text-base md:text-lg font-bold text-white border-b border-[#322C24] pb-2">История партий</h3>
                 <div className="overflow-x-auto -mx-4 px-4 md:mx-0 md:px-0">
